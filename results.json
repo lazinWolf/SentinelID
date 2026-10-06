@@ -1,0 +1,72 @@
+{
+  "selection": {
+    "scorer": "REP_RF",
+    "representation": "PM",
+    "gate": "fit",
+    "queue_variant": "max_cooldown",
+    "model": "data/model.joblib",
+    "sha256": "d95928396e910733082624c5c33689d69306d8a12994d5523f4efe7daa46b522"
+  },
+  "validation": {
+    "frontier": [
+      {
+        "system": "C_IF/fit/max_cooldown/1",
+        "capacity": 1,
+        "reviews": 30,
+        "current_positive_reviews": 3,
+        "context_positive_reviews": 5,
+        "timely_incidents": 2,
+        "incidents_available": 11,
+        "official_incidents": 2,
+        "selected": false
+      },
+      {
+        "system": "REP_RF/fit/max_cooldown/1",
+        "capacity": 1,
+        "reviews": 31,
+        "current_positive_reviews": 21,
+        "context_positive_reviews": 23,
+        "timely_incidents": 9,
+        "incidents_available": 11,
+        "official_incidents": 9,
+        "selected": true
+      }
+    ]
+  },
+  "verdict": {
+    "verdict": "unchanged \u2014 improvement not established",
+    "scope": "Development-selected RF versus corrected IF at the fixed November primary operating point; synthetic CERT r4.2 benchmark only",
+    "selected": "REP_RF/fit/max_cooldown/1",
+    "primary_comparator": "C_IF/fit/max_cooldown/1",
+    "selected_reviews": 31,
+    "comparator_reviews": 30,
+    "selected_timely": 9,
+    "comparator_timely": 2,
+    "selected_current_positive_yield": 0.6774193548387096,
+    "comparator_current_positive_yield": 0.1,
+    "paired_actor_uncertainty": {
+      "difference": 0.6363636363636364,
+      "actor_clusters": 11,
+      "draws": 2000,
+      "seed": 42,
+      "interval95": [
+        0.36363636363636365,
+        0.9090909090909091
+      ],
+      "scope": "Paired actor-cluster bootstrap, descriptive on one benchmark calendar interval; detector is fixed, uncertainty does not include training/model selection."
+    },
+    "secondary_calibration_uncertainty": {
+      "difference": 0.8181818181818182,
+      "actor_clusters": 11,
+      "draws": 2000,
+      "seed": 42,
+      "interval95": [
+        0.5454545454545454,
+        1.0
+      ],
+      "scope": "Paired actor-cluster bootstrap, descriptive on one benchmark calendar interval; detector is fixed, uncertainty does not include training/model selection."
+    },
+    "criteria": "Improved within this benchmark operating point only if selected cost<=primary comparator cost, timely incident reach is greater, current-positive review yield is not lower, and descriptive paired actor-cluster95% interval for timely coverage difference excludes0. A lone extra incident or higher AP alone is insufficient. Otherwise unchanged/improvement not established, or worse if the inverse tradeoff is established. Broader real-world superiority is never inferred from this single synthetic-benchmark interval.",
+    "labels_access": "RF uses exact-event-day training labels; IF does not. This is an operational system comparison, not proof of a better unsupervised method."
+  }
+}

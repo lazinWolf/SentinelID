@@ -1,0 +1,58 @@
+# Local datasets, model binaries, application state and historical experiments.
+# Keep config.json and results.json tracked: these are small reviewable contracts.
+/data/
+/archive/
+
+# Python environments, builds and caches.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+/build/
+/dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.cache/
+.tox/
+.nox/
+.ipynb_checkpoints/
+.python_history
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Runtime files and SQLite sidecars outside the default data directory.
+*.joblib
+*.pickle
+*.pkl
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+*.log
+*.pid
+
+# Local credentials and agent settings.
+.env
+.env.*
+!.env.example
+.aws/
+.codex/
+.agents/
+
+# Editor and operating-system files.
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

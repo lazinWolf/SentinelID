@@ -6,6 +6,8 @@
 
 Use [ARCHITECTURE.md](ARCHITECTURE.md) for diagrams and [README.md](README.md) for methodology and results. The walkthrough uses the completed saved run, not newly computed live evaluation outcomes.
 
+For a fresh checkout, first follow README setup: download the artifacts with `setup --accept-data-license`, verify them, and finish `replay` before presenting. The GitHub repository does not contain a completed application database.
+
 ## Preflight
 
 Run from the checkout on the machine containing the prepared local data and model:

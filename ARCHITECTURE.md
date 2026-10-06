@@ -153,3 +153,7 @@ Evidence explains aggregate context; exact forest-to-event attribution is not co
 ## Current boundaries
 
 The app is a local research demonstration with a fixed benchmark horizon. Live identity-provider connectors, production authentication, automated retraining, an outage feed and a short checkpoint-based demo preset are not implemented. Archived full evaluation and current operational replay are distinct execution paths.
+
+## Reproducible acquisition
+
+`sentinelid setup` reads `setup-manifest.json`, obtains checksum-pinned model and bounded source ranges, verifies date boundaries and row counts, and installs matching CSV/LDAP artifacts atomically. Partial network transfers resume; existing differing artifacts are preserved. The dataset license requires explicit acknowledgement. Setup leaves configuration, frozen results and the application database unchanged. Replay then creates evidence pointers for the local checkout.

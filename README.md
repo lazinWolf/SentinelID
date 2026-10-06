@@ -27,6 +27,8 @@ CSV + LDAP → ordered records → daily history → features → model score
 Run from this checkout. The tested environment is **Linux, Python 3.14.3 and scikit-learn 1.9.1**. Replay uses POSIX locking; on Windows, use a Linux environment such as WSL. Use the pinned dependencies for the saved model.
 
 ```bash
+git clone https://github.com/lazinWolf/SentinelID.git
+cd SentinelID
 python3.14 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m unittest discover -s tests -q
@@ -34,14 +36,20 @@ python3.14 -m venv .venv
 
 If the project environment already exists, use it directly. Unit tests do not require the large dataset, model or recovery archive.
 
-With local runtime artifacts in place:
+Review the [dataset terms](https://huggingface.co/datasets/jinmang2/cert_insider_threat/resolve/010e4562bb025ea15ea73c7a1f9231037b237ad2/r4.2/license.txt) before downloading. If you agree:
 
 ```bash
-.venv/bin/python -m sentinelid verify
+.venv/bin/python -m sentinelid setup --accept-data-license
+.venv/bin/python -m sentinelid verify --sources
+.venv/bin/python -m sentinelid replay
 .venv/bin/python -m sentinelid serve
 ```
 
-Open **http://127.0.0.1:8767/**. The existing project machine has a completed demonstration with 31 cases. A fresh checkout does not include the pretrained model or saved database.
+Open **http://127.0.0.1:8767/**. Setup downloads approximately **7 GB**; allow **15 GB free disk space** for preparation. Downloads resume after interruption. Replay processes 14.1 million events and can take considerable time; rerun the same command to resume. The dashboard has no cases until replay reaches the November scoring period.
+
+Setup uses a pinned public Hugging Face mirror of CERT r4.2 and a checksum-pinned model from this project's GitHub Release. It downloads only the declared event ranges and monthly identity snapshots, never answer labels. Each selected CSV must match its frozen row count and checksum. Existing matching artifacts are reused; differing files cause an error and are preserved. Setup does not train, evaluate, or overwrite application state.
+
+For a smaller acquisition check, use `setup --accept-data-license --sources device logon`. This downloads only those activity sources plus LDAP and the model; **all five sources are required for replay**. `setup --model-only` downloads just the model. Public hosts must remain available; interrupted `.part` downloads are retained under `data/.downloads/`.
 
 ### Local data and model
 
@@ -61,7 +69,7 @@ data/
         └── LDAP/                # October and November snapshots
 ```
 
-These artifacts and the recovery archive are excluded from Git. Restore prepared local artifacts or recover the historical acquisition/training code below. The active CLI does not download, prepare or train them; downloading the full benchmark alone does not recreate this artifact contract.
+These artifacts and the recovery archive are excluded from Git. The setup command recreates the prepared data/model contract using tracked `setup-manifest.json`. A new replay creates a local database and evidence pointers for your checkout.
 
 Keep source CSV bytes unchanged because evidence uses original IDs and byte offsets. Saved database pointers contain absolute paths, so moving the demo to another machine requires rebasing those pointers. `verify --sources` hashes CSV and LDAP files against local provenance; it does not certify equality to a complete official archive. Model/checkpoint files use Python serialization and should come from a trusted project source.
 
@@ -71,6 +79,7 @@ Prefix each command with `.venv/bin/python -m sentinelid`:
 
 | Command | Purpose |
 | --- | --- |
+| `setup --accept-data-license` | Download, prepare and verify the exact data shards and model |
 | `status` | Show the latest persisted run, selected model and case count |
 | `verify` | Check the model checksum and required source-file presence |
 | `verify --sources` | Also verify all original CSV and LDAP checksums |
@@ -119,7 +128,8 @@ The saved replay processed **14,143,645 original records**, produced **18,772 sc
 ```text
 sentinelid/                # Ingestion, features, scoring/queue/replay, store, server and CLI
 dashboard/                # HTML, JavaScript and CSS investigation interface
-tests/test_pipeline.py    # Feature, queue, checkpoint and review regressions
+tests/                    # Pipeline and acquisition regressions
+setup-manifest.json       # Pinned URLs, byte ranges, row counts and checksums
 .github/workflows/ci.yml  # Dataset-free unit test workflow
 config.json               # Runtime settings and selected model identity
 results.json              # Saved comparison and measured verdict
@@ -131,7 +141,7 @@ data/                     # Local only: originals, model and application state
 archive/                  # Local only: recoverable historical work
 ```
 
-Source, configuration, saved result summaries and documentation belong in Git. Data, model binaries, databases, archives, credentials and caches remain local. The CI workflow runs tests without downloading benchmark data; hosted execution is separate from local verification.
+Source, configuration, saved result summaries and documentation belong in Git. Dataset files, databases, archives, credentials and caches remain local; the pinned model is distributed separately as a GitHub Release asset. The CI workflow runs tests without downloading benchmark data; hosted execution is separate from local verification.
 
 ## Scope and next steps
 
@@ -159,3 +169,5 @@ The archive preserves earlier compatibility links, implementations and experimen
 ## Dataset attribution
 
 The synthetic CERT Insider Threat Test Dataset is published by the CMU Software Engineering Institute. See the [official description](https://www.sei.cmu.edu/library/insider-threat-test-dataset/) and [dataset record](https://doi.org/10.1184/R1/12841247.v1). Local acquisition and mirror receipts are in `data/provenance.json`; benchmark terms and attribution are separate from this project's code.
+
+Dataset terms restrict redistribution. Download the originals from the documented source; do not commit them or assume this repository grants a dataset license. Copyright © 2011 ExactData, LLC. All Rights Reserved.

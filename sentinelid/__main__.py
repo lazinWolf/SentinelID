@@ -9,6 +9,14 @@ from .ingestion import ROOT
 def main():
     parser = argparse.ArgumentParser(description="SentinelID original-event behavioral pipeline")
     commands = parser.add_subparsers(dest="command", required=True)
+    acquisition = commands.add_parser(
+        "setup", help="Download and verify the deployed data and model"
+    )
+    acquisition.add_argument("--accept-data-license", action="store_true")
+    acquisition.add_argument("--model-only", action="store_true")
+    acquisition.add_argument(
+        "--sources", nargs="+", choices=["device", "logon", "email", "file", "http"]
+    )
     commands.add_parser("status", help="Show persisted progress and the selected model")
     verify = commands.add_parser(
         "verify", help="Verify the deployed model and required source files"
@@ -26,7 +34,15 @@ def main():
     args = parser.parse_args()
 
     try:
-        if args.command == "status":
+        if args.command == "setup":
+            from .setup import setup
+
+            setup(
+                sources=args.sources,
+                model_only=args.model_only,
+                accept_data_license=args.accept_data_license,
+            )
+        elif args.command == "status":
             from .store import WorkloadStore
 
             result = WorkloadStore().summary()
@@ -86,7 +102,7 @@ def main():
                         break
             finally:
                 worker.close()
-    except (ValueError, FileNotFoundError) as error:
+    except (ValueError, OSError) as error:
         parser.exit(1, f"Error: {error}\n")
 
 

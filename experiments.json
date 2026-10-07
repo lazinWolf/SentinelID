@@ -1,0 +1,25 @@
+{
+  "schema": "sentinelid-factorial-v1",
+  "feature_contract": "behavior-experiment-v1",
+  "detector": ["rf", "if"],
+  "representation_extension": ["off", "temporal_v1"],
+  "peer_context": ["off", "historical_v1"],
+  "ranking": ["detector_score", "relevance_v1"],
+  "protocol": {
+    "history_start": "2010-05-01",
+    "fit_start": "2010-06-08",
+    "fit_end": "2010-10-15",
+    "calibration_start": "2010-10-15",
+    "calibration_end": "2010-10-22",
+    "evaluation_start": "2010-11-01",
+    "evaluation_end": "2010-12-01",
+    "oof_cutoffs": ["2010-07-15", "2010-08-15", "2010-09-15"],
+    "gate_quantile": 0.99,
+    "timely_hours": 72,
+    "evaluation_status": "consumed-retrospective",
+    "cost_criterion": "admissions<=corrected control; timely reach greater; current-positive yield not lower",
+    "rf": {"trees": 100, "depth": 8, "minimum_leaf": 3, "class_weight": "balanced_subsample", "seed": 42},
+    "if": {"trees": 100, "samples": 1024, "seed": 42},
+    "ranker": {"C": 1.0, "class_weight": "balanced", "seed": 42}
+  }
+}

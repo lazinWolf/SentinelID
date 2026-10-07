@@ -6,7 +6,7 @@ SentinelID is an academic and portfolio research prototype built around the CERT
 
 The current application implements operational replay and investigation. Earlier rule-based detection, training, simulations and full evaluations are preserved in a local recovery archive. This is a midterm research prototype, not a production identity-security service.
 
-[Architecture and pipeline diagrams](ARCHITECTURE.md) · [Midterm demonstration guide](DEMO.md)
+[Architecture and pipeline diagrams](ARCHITECTURE.md) · [Midterm demonstration guide](DEMO.md) · [Optional experiments](EXPERIMENTS.md) · [Research progression](EXPERIMENT_HISTORY.md)
 
 ## Capabilities
 
@@ -171,3 +171,17 @@ The archive preserves earlier compatibility links, implementations and experimen
 The synthetic CERT Insider Threat Test Dataset is published by the CMU Software Engineering Institute. See the [official description](https://www.sei.cmu.edu/library/insider-threat-test-dataset/) and [dataset record](https://doi.org/10.1184/R1/12841247.v1). Local acquisition and mirror receipts are in `data/provenance.json`; benchmark terms and attribution are separate from this project's code.
 
 Dataset terms restrict redistribution. Download the originals from the documented source; do not commit them or assume this repository grants a dataset license. Copyright © 2011 ExactData, LLC. All Rights Reserved.
+
+## Optional corrected experiments
+
+The deployed application retains its frozen historical contract, including the newly documented three-day USB/copy magnitude target defect. Experimental `behavior-experiment-v1` corrects that target and refits models in isolated outputs. The default application is not changed.
+
+With the local research archive and prepared sources available:
+
+```bash
+.venv/bin/python -m sentinelid experiment --config experiments.json
+# Resume an interrupted experiment:
+.venv/bin/python -m sentinelid experiment --config experiments.json --resume
+```
+
+This runs separate eight-configuration RF/IF matrices for temporal, peer and relevance-ranking options. Historical results stay outside the corrected tables; PCA is excluded. Structured module measurements and separate detector/priority values are persisted. See [the experiment guide](EXPERIMENTS.md) for prerequisites, protocol and limitations. The public clone does not include archived research inputs.

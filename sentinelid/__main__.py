@@ -17,6 +17,16 @@ def main():
     acquisition.add_argument(
         "--sources", nargs="+", choices=["device", "logon", "email", "file", "http"]
     )
+    experiment = commands.add_parser(
+        "experiment", help="Run isolated corrected optional-module experiments"
+    )
+    experiment.add_argument("--config", required=True)
+    experiment.add_argument("--resume", action="store_true")
+    experiment.add_argument(
+        "--stop-after-days",
+        type=int,
+        help="Checkpoint each configuration after this many additional days",
+    )
     commands.add_parser("status", help="Show persisted progress and the selected model")
     verify = commands.add_parser(
         "verify", help="Verify the deployed model and required source files"
@@ -42,6 +52,12 @@ def main():
                 model_only=args.model_only,
                 accept_data_license=args.accept_data_license,
             )
+        elif args.command == "experiment":
+            from .experiments import run
+
+            if args.stop_after_days is not None and args.stop_after_days < 1:
+                raise ValueError("--stop-after-days must be positive")
+            run(args.config, args.resume, args.stop_after_days)
         elif args.command == "status":
             from .store import WorkloadStore
 

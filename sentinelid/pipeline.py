@@ -118,6 +118,9 @@ class WorkloadQueue:
                 "score_history": [{"day": c["day"], "score": c["score"]}],
             }
 
+    def rank_key(self, candidate):
+        return (-candidate["score"], candidate["available_time"], candidate["identity_id"])
+
     def decide(self, when):
         for u, c in list(self.pending.items()):
             if datetime.fromisoformat(when) > datetime.fromisoformat(
@@ -134,7 +137,7 @@ class WorkloadQueue:
                 del self.pending[u]
         candidates = sorted(
             (c for c in self.pending.values() if c["available_time"] <= when),
-            key=lambda c: (-c["score"], c["available_time"], c["identity_id"]),
+            key=self.rank_key,
         )
         chosen = candidates[: self.config["daily_budget"]]
         results = []

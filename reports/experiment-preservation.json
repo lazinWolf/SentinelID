@@ -1,0 +1,366 @@
+{
+  "experiment_id": "abcd831c3f4e3171fa84",
+  "comparison_sha256": "2580dda6532585d6078c7bbf4a49bccf64337081e3c9d5ca5d3244d241d427a9",
+  "historical_results_excluded_from_factorial": true,
+  "preservation": {
+    "before": {
+      "config.json": "b34358e21d1badaabca442c7897cc4ac3c49bcba45dcbac64fed4d3855011b5a",
+      "results.json": "574a9014dad141cf34e7105156c6039738f434356c47a4d002b950d1b2f77bf5",
+      "data/model.joblib": "d95928396e910733082624c5c33689d69306d8a12994d5523f4efe7daa46b522",
+      "data/operations.sqlite": "4fb3a78c46fdc384317d5d707ef3937ae724deab655aedbc434a9d0d1bb721e1",
+      "data/provenance.json": "f9875541581d4a8aa0f699caeb33228849dd72a7617d0cf2f2550322248385a0",
+      "archive/research-history.tar.zst": "05de10fcec9ed156e8c7a50e2975f031b69c567ffff5031b943403d24069684f",
+      "sentinelid/__init__.py": "d39cbcf0d2c91c1ae918b38a75edfccb1bdaf56e6ca08b4ba63c1cd6f842d22e",
+      "sentinelid/ingestion.py": "79d930c7bfcf88376997aa3c8e5c3dc04f2a40e8244d0e45385f95a869bb60cc",
+      "sentinelid/features.py": "6f817d1401a592c4ebe265a4b28559e6e990a91fcd1e860307a2f70ed0d95b8d",
+      "sentinelid/store.py": "17c616e4dbb186f8c43c1738aecb82a385e51cfb0f874ac1cf6dc2599096c44f",
+      "sentinelid/pipeline.py": "526a9d6237f9bba9a1cdd84148a7e6c680709e1cc88c90b2422ef26c2f78b107",
+      "sentinelid/server.py": "69e4169bfcbc324f4e4e891044136c26241ef26e4f8d835ab5c24c8629545948",
+      "sentinelid/__main__.py": "6b3fb32fab148df59d4f1da43ea57409ccdbd0708a97b628ddc2c0c025fc61a2",
+      "sentinelid/setup.py": "b45b1ee19bf9797daada6a1a5f9195d2c792e70d57544c39bd483b455f1fac82",
+      "dashboard/style.css": "386fd66876133225d51dd90422bb71617f56a833ea6a072087c938b44de67fff",
+      "dashboard/workload.html": "e1f05db3a5e5ad2c5b26173e45c35704c0c3c6b406ed6af0dd59c0c49ffd4b89",
+      "dashboard/workload.js": "0715a60846670f21dc222903e4e3213d9f2df537ae0c436ce82d7fb656d697fe",
+      "data/raw/recovery-v3/device.csv": "7c2a5b6e6e854f7c72d6b5c80acfde2a7db26a67fb4c3c8c3e4b2dbf4af8690a",
+      "data/raw/recovery-v3/logon.csv": "ed6b9ff82d2cf4e5c3390b962102640f663ddfcc807289e30cf32662b41f0bee",
+      "data/raw/recovery-v3/file.csv": "961cae9f1a91a813fd5038ccf04fcc0a6fc93c090d619e027661dd4b9ca814da",
+      "data/raw/recovery-v3/email.csv": "4ca0a2bbce011596bf4c474e5b1c8b7f93d10e586767ae628c9b4fe72387ed62",
+      "data/raw/recovery-v3/http.csv": "a77c2ae32ecba9917570e0eb25b016b34ee36bda620d6c6b772c8544a7fa9b2c",
+      "data/raw/workload-v4/device.csv": "ddf28c56bec2b3910be116702f3f2bea601ff50b37415e0ed371ab25e6f2714a",
+      "data/raw/workload-v4/logon.csv": "5f6fcb73b69985a74fad5c507d017c1fba03926c0dcca035e1975e2252df1fa4",
+      "data/raw/workload-v4/file.csv": "87bd0862ade1842e0ffb451b9ab44d5952faa33f9091bb3166185ea208b3046c",
+      "data/raw/workload-v4/email.csv": "d19d127113f117c7b193baf23f29317f9bfbf20a467124f50265777823374e30",
+      "data/raw/workload-v4/http.csv": "6574e8ffbf4b6ac7a884aff67b3670cb6155ec812ed46c6ca6b986dcf7b5cec2",
+      "data/raw/workload-v4/LDAP/2010-10.csv": "ec3c8f3870fa09e130479e17b3b4ccee4628b7a13b5b9e199e7925e7b7201c33",
+      "data/raw/workload-v4/LDAP/2010-11.csv": "4d36de726c3d33129a55b2c06608feaa45de567810e69b5214855ee9ed2407d4",
+      "data/raw/recovery-v3/LDAP/2010-05.csv": "70f44639aa0fdf9eb654a7de2590d4bb63ee4095309d0178752254b47e9bb42d",
+      "data/raw/recovery-v3/LDAP/2010-06.csv": "5a1735c5b2175f5d7127155fcf07834d9440e3da3fc15cae21492ab3a79053da",
+      "data/raw/recovery-v3/LDAP/2010-07.csv": "fa52649117a3fdb06dd822098cdfad4c5af392a01bf83fb7bae78062c471aa0d",
+      "data/raw/recovery-v3/LDAP/2010-08.csv": "1ea0d4e8ee46e35d82a53c448c78e8b069fc9645b487d614aa5dd6c7336e04ec",
+      "data/raw/recovery-v3/LDAP/2010-09.csv": "309d05eebfa482973d7e9b9cfd523247ebf8dd540a3ab45346f5baedcd1daeeb",
+      "data/raw/recovery-v3/LDAP/2010-10.csv": "ec3c8f3870fa09e130479e17b3b4ccee4628b7a13b5b9e199e7925e7b7201c33"
+    },
+    "after": {
+      "config.json": "b34358e21d1badaabca442c7897cc4ac3c49bcba45dcbac64fed4d3855011b5a",
+      "results.json": "574a9014dad141cf34e7105156c6039738f434356c47a4d002b950d1b2f77bf5",
+      "data/model.joblib": "d95928396e910733082624c5c33689d69306d8a12994d5523f4efe7daa46b522",
+      "data/operations.sqlite": "4fb3a78c46fdc384317d5d707ef3937ae724deab655aedbc434a9d0d1bb721e1",
+      "data/provenance.json": "f9875541581d4a8aa0f699caeb33228849dd72a7617d0cf2f2550322248385a0",
+      "archive/research-history.tar.zst": "05de10fcec9ed156e8c7a50e2975f031b69c567ffff5031b943403d24069684f",
+      "sentinelid/__init__.py": "d39cbcf0d2c91c1ae918b38a75edfccb1bdaf56e6ca08b4ba63c1cd6f842d22e",
+      "sentinelid/ingestion.py": "79d930c7bfcf88376997aa3c8e5c3dc04f2a40e8244d0e45385f95a869bb60cc",
+      "sentinelid/features.py": "6f817d1401a592c4ebe265a4b28559e6e990a91fcd1e860307a2f70ed0d95b8d",
+      "sentinelid/store.py": "17c616e4dbb186f8c43c1738aecb82a385e51cfb0f874ac1cf6dc2599096c44f",
+      "sentinelid/pipeline.py": "7534a68706d43bdec88c2863ee1d7bb8c1bd45ebfe9cd0d6363a49f94e693c47",
+      "sentinelid/server.py": "69e4169bfcbc324f4e4e891044136c26241ef26e4f8d835ab5c24c8629545948",
+      "sentinelid/__main__.py": "6ac509e160ac766e4b9ebbc38e2dc1f3eef6ffdc97d081cc1609d7166e9aaa59",
+      "sentinelid/setup.py": "b45b1ee19bf9797daada6a1a5f9195d2c792e70d57544c39bd483b455f1fac82",
+      "dashboard/style.css": "386fd66876133225d51dd90422bb71617f56a833ea6a072087c938b44de67fff",
+      "dashboard/workload.html": "e1f05db3a5e5ad2c5b26173e45c35704c0c3c6b406ed6af0dd59c0c49ffd4b89",
+      "dashboard/workload.js": "0715a60846670f21dc222903e4e3213d9f2df537ae0c436ce82d7fb656d697fe",
+      "data/raw/recovery-v3/device.csv": "7c2a5b6e6e854f7c72d6b5c80acfde2a7db26a67fb4c3c8c3e4b2dbf4af8690a",
+      "data/raw/recovery-v3/logon.csv": "ed6b9ff82d2cf4e5c3390b962102640f663ddfcc807289e30cf32662b41f0bee",
+      "data/raw/recovery-v3/file.csv": "961cae9f1a91a813fd5038ccf04fcc0a6fc93c090d619e027661dd4b9ca814da",
+      "data/raw/recovery-v3/email.csv": "4ca0a2bbce011596bf4c474e5b1c8b7f93d10e586767ae628c9b4fe72387ed62",
+      "data/raw/recovery-v3/http.csv": "a77c2ae32ecba9917570e0eb25b016b34ee36bda620d6c6b772c8544a7fa9b2c",
+      "data/raw/workload-v4/device.csv": "ddf28c56bec2b3910be116702f3f2bea601ff50b37415e0ed371ab25e6f2714a",
+      "data/raw/workload-v4/logon.csv": "5f6fcb73b69985a74fad5c507d017c1fba03926c0dcca035e1975e2252df1fa4",
+      "data/raw/workload-v4/file.csv": "87bd0862ade1842e0ffb451b9ab44d5952faa33f9091bb3166185ea208b3046c",
+      "data/raw/workload-v4/email.csv": "d19d127113f117c7b193baf23f29317f9bfbf20a467124f50265777823374e30",
+      "data/raw/workload-v4/http.csv": "6574e8ffbf4b6ac7a884aff67b3670cb6155ec812ed46c6ca6b986dcf7b5cec2",
+      "data/raw/workload-v4/LDAP/2010-10.csv": "ec3c8f3870fa09e130479e17b3b4ccee4628b7a13b5b9e199e7925e7b7201c33",
+      "data/raw/workload-v4/LDAP/2010-11.csv": "4d36de726c3d33129a55b2c06608feaa45de567810e69b5214855ee9ed2407d4",
+      "data/raw/recovery-v3/LDAP/2010-05.csv": "70f44639aa0fdf9eb654a7de2590d4bb63ee4095309d0178752254b47e9bb42d",
+      "data/raw/recovery-v3/LDAP/2010-06.csv": "5a1735c5b2175f5d7127155fcf07834d9440e3da3fc15cae21492ab3a79053da",
+      "data/raw/recovery-v3/LDAP/2010-07.csv": "fa52649117a3fdb06dd822098cdfad4c5af392a01bf83fb7bae78062c471aa0d",
+      "data/raw/recovery-v3/LDAP/2010-08.csv": "1ea0d4e8ee46e35d82a53c448c78e8b069fc9645b487d614aa5dd6c7336e04ec",
+      "data/raw/recovery-v3/LDAP/2010-09.csv": "309d05eebfa482973d7e9b9cfd523247ebf8dd540a3ab45346f5baedcd1daeeb",
+      "data/raw/recovery-v3/LDAP/2010-10.csv": "ec3c8f3870fa09e130479e17b3b4ccee4628b7a13b5b9e199e7925e7b7201c33"
+    },
+    "protected_unchanged": 33,
+    "expected_source_extension_points": [
+      "sentinelid/__main__.py",
+      "sentinelid/pipeline.py"
+    ],
+    "unexpected_changes": [],
+    "active_database_model_configuration_results_sources_archive_unchanged": true
+  },
+  "historical_reproduction": {
+    "scope": "Historical preservation only; excluded from corrected factorial results",
+    "models": {
+      "C_IF": {
+        "sha256": "502ec3943ba3fbbadb3e98c746d039a4d682be8470c62bc4b7bdbb0dbd07653d",
+        "maximum_score_error": 0.0
+      },
+      "C_MATCH_IF": {
+        "sha256": "dbc3a6a7a3b4a3eec880946235a44dd6e300e81dde79e440b78e909e5b1faedb",
+        "maximum_score_error": 0.0
+      },
+      "REP_BASE_IF": {
+        "sha256": "6c8a694c657e182e077d7053399c52bb86da5d1a5768fd0e3f0accb8f3c8d415",
+        "maximum_score_error": 0.0
+      },
+      "REP_IF": {
+        "sha256": "4d901d36742f72d341620235944de193d8c21c6dbe0bb59001c8463acef9dc8d",
+        "maximum_score_error": 0.0
+      },
+      "REP_RF": {
+        "sha256": "d95928396e910733082624c5c33689d69306d8a12994d5523f4efe7daa46b522",
+        "maximum_score_error": 0.0
+      }
+    },
+    "admissions": {
+      "C_IF": {
+        "count": 30,
+        "cases_scores_evidence_equal": true
+      },
+      "REP_IF": {
+        "count": 32,
+        "cases_scores_evidence_equal": true
+      },
+      "REP_RF": {
+        "count": 31,
+        "cases_scores_evidence_equal": true
+      }
+    },
+    "active_rf_cases_equal": true
+  },
+  "original_record_verification": {
+    "resolved_original_pointers": 77482,
+    "original_day_counts_equal": 63,
+    "source_pass_records": 2236607
+  },
+  "native_pipeline_equivalence": {
+    "4489fa7e9d74": {
+      "family": "rf",
+      "cases": 30,
+      "observations": 18772,
+      "days": 33,
+      "native_queue_cases_and_decisions_exact": true,
+      "separate_score_columns_equal": true
+    },
+    "04c1761b51d9": {
+      "family": "rf",
+      "cases": 30,
+      "observations": 18772,
+      "days": 33,
+      "native_queue_cases_and_decisions_exact": true,
+      "separate_score_columns_equal": true
+    },
+    "07e06ee61673": {
+      "family": "rf",
+      "cases": 30,
+      "observations": 18772,
+      "days": 33,
+      "native_queue_cases_and_decisions_exact": true,
+      "separate_score_columns_equal": true
+    },
+    "24b814565ca4": {
+      "family": "rf",
+      "cases": 31,
+      "observations": 18772,
+      "days": 33,
+      "native_queue_cases_and_decisions_exact": true,
+      "separate_score_columns_equal": true
+    },
+    "95632b1a090a": {
+      "family": "if",
+      "cases": 31,
+      "observations": 18772,
+      "days": 33,
+      "native_queue_cases_and_decisions_exact": true,
+      "separate_score_columns_equal": true
+    },
+    "55cc4d1129dc": {
+      "family": "if",
+      "cases": 32,
+      "observations": 18772,
+      "days": 33,
+      "native_queue_cases_and_decisions_exact": true,
+      "separate_score_columns_equal": true
+    },
+    "00017920b220": {
+      "family": "if",
+      "cases": 30,
+      "observations": 18772,
+      "days": 33,
+      "native_queue_cases_and_decisions_exact": true,
+      "separate_score_columns_equal": true
+    },
+    "03fbb814af9a": {
+      "family": "if",
+      "cases": 31,
+      "observations": 18772,
+      "days": 33,
+      "native_queue_cases_and_decisions_exact": true,
+      "separate_score_columns_equal": true
+    }
+  },
+  "persistence_and_chronological_ranking": {
+    "configurations": {
+      "4489fa7e9d74": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 30
+      },
+      "db4562540608": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 30
+      },
+      "04c1761b51d9": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 30
+      },
+      "9373cbc8b9a6": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 29
+      },
+      "07e06ee61673": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 30
+      },
+      "2d883296899d": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 30
+      },
+      "24b814565ca4": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 31
+      },
+      "3a9bf14a9078": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 30
+      },
+      "95632b1a090a": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 31
+      },
+      "b51d0c3e6a21": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 32
+      },
+      "55cc4d1129dc": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 32
+      },
+      "9b8edede14cc": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 32
+      },
+      "00017920b220": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 30
+      },
+      "8434f3e36ac2": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 31
+      },
+      "03fbb814af9a": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 31
+      },
+      "6eabfcb5965c": {
+        "explicit_score_columns_exact": true,
+        "completed_fresh_process_checkpoint": true,
+        "independent_case_maxima_and_days": true,
+        "case_pointer_counts_equal": true,
+        "cases": 31
+      }
+    },
+    "rankers": {
+      "rf-t0p0": {
+        "held_out_only_preprocessing": true,
+        "historical_rows": 62889,
+        "positive_context_labels": 679
+      },
+      "rf-t0p1": {
+        "held_out_only_preprocessing": true,
+        "historical_rows": 62889,
+        "positive_context_labels": 679
+      },
+      "rf-t1p0": {
+        "held_out_only_preprocessing": true,
+        "historical_rows": 62889,
+        "positive_context_labels": 679
+      },
+      "rf-t1p1": {
+        "held_out_only_preprocessing": true,
+        "historical_rows": 62889,
+        "positive_context_labels": 679
+      },
+      "if-t0p0": {
+        "held_out_only_preprocessing": true,
+        "historical_rows": 62889,
+        "positive_context_labels": 679
+      },
+      "if-t0p1": {
+        "held_out_only_preprocessing": true,
+        "historical_rows": 62889,
+        "positive_context_labels": 679
+      },
+      "if-t1p0": {
+        "held_out_only_preprocessing": true,
+        "historical_rows": 62889,
+        "positive_context_labels": 679
+      },
+      "if-t1p1": {
+        "held_out_only_preprocessing": true,
+        "historical_rows": 62889,
+        "positive_context_labels": 679
+      }
+    },
+    "evaluation_labels_absent_from_training_cache": true,
+    "fitting_positive_days": 512
+  },
+  "tests": {
+    "unit_tests_passed": 33,
+    "lint_passed": true,
+    "compilation_passed": true,
+    "full_source_verification_passed": true
+  },
+  "deployment_changed": false
+}

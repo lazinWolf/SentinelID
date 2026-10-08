@@ -56,3 +56,10 @@ coverage.xml
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Presentation and demo material, kept local only.
+/DEMO.md
+/literature_review.md
+/present.md
+/present-script.md
+/setup-manifest.json

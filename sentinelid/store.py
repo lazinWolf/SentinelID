@@ -70,6 +70,9 @@ class WorkloadStore:
                 result["closed_days"] = db.execute(
                     "SELECT count(DISTINCT day) FROM observations WHERE run=?", (rid,)
                 ).fetchone()[0]
+                result["scored_identity_days"], result["last_scored_day"] = db.execute(
+                    "SELECT count(*),max(day) FROM observations WHERE run=?", (rid,)
+                ).fetchone()
         return result
 
     def queue(self, run_id=None, detector=None, status="all", search="", offset=0, limit=20):
@@ -159,6 +162,18 @@ class WorkloadStore:
             "observations": observations,
             "evidence_total": len(case["evidence_pointers"]),
             "evidence_offset": offset,
+            "evidence_summary": {
+                "current_records": sum(
+                    p["relationship"] == "current scoring period" for p in case["evidence_pointers"]
+                ),
+                "context_records": sum(
+                    p["relationship"] == "prior rolling context" for p in case["evidence_pointers"]
+                ),
+                "sources": {
+                    source: sum(p["source"] == source for p in case["evidence_pointers"])
+                    for source in sorted({p["source"] for p in case["evidence_pointers"]})
+                },
+            },
             "events": [
                 evidence(p)
                 for p in sorted(

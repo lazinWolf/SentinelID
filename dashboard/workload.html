@@ -1,1 +1,76 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SentinelID · Pipeline</title><link rel="stylesheet" href="/style.css"><body><header><a class="brand" href="/">SentinelID</a><span class="run-label">original records · behavioral evidence · investigations</span></header><main><h1>Behavioral detection pipeline</h1><p id="status" class="notice">Loading pipeline…</p><h2>Saved results · November 2010</h2><p class="trace-note">Admissions are assumed budgeted reviews, not measured analyst labor. Current records, retained context and timely incidents are different units. Queues need not fill capacity.</p><div id="results" class="table-wrap"></div><h2>Original-event pipeline</h2><div class="toolbar"><button class="button" id="new">New run</button><button class="button" id="start">Start / resume</button><button class="button" id="pause">Pause</button><button class="button" id="refresh">Refresh</button></div><p id="runtime" class="mono"></p><p id="error" role="alert" hidden></p><h2>Committed investigation queue</h2><div class="toolbar"><input id="search" type="search" aria-label="Search v4 identities"><select id="filter" aria-label="V4 review status"><option value="all">All statuses</option><option>new</option><option>in_review</option><option>resolved</option><option>dismissed</option></select></div><div id="cases" class="table-wrap"></div><div class="pagination"><button id="previous" class="button">Previous</button><span id="page"></span><button id="next" class="button">Next</button></div><footer>Independent application state. Frozen research records and results remain preserved. Reviews do not change benchmark labels.</footer></main><div class="drawer-backdrop" id="backdrop" hidden></div><aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="title" hidden><div class="drawer-head"><h2 id="title">Case</h2><button id="close" class="button" aria-label="Close v4 case">Close</button></div><div id="case-content"></div></aside><script src="/workload.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SentinelID · Behavioral detection</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <a class="brand" href="/" aria-label="SentinelID home"><span class="brand-mark" aria-hidden="true">S</span><span>SentinelID<small>Behavioral identity analytics</small></span></a>
+  <div class="header-actions"><span class="status-pill" id="service-state">Connecting…</span><button class="button" id="present" aria-pressed="false" title="Larger text for presenting · P">Presentation mode</button></div>
+</header>
+<nav class="main-tabs" aria-label="Dashboard sections" role="tablist">
+  <button role="tab" class="nav active" id="tab-pipeline" aria-controls="pipeline-view" aria-selected="true" data-view="pipeline">Pipeline</button>
+  <button role="tab" class="nav" id="tab-demo" aria-controls="demo-view" aria-selected="false" tabindex="-1" data-view="demo">Day replay</button>
+  <button role="tab" class="nav" id="tab-cases" aria-controls="cases-view" aria-selected="false" tabindex="-1" data-view="cases">Investigations <span id="nav-case-count" class="count-pill">—</span></button>
+  <button role="tab" class="nav" id="tab-results" aria-controls="results-view" aria-selected="false" tabindex="-1" data-view="results">Benchmark results</button>
+</nav>
+<main>
+  <p id="error" class="error" role="alert" hidden></p>
+  <section id="pipeline-view" role="tabpanel" aria-labelledby="tab-pipeline">
+    <div class="page-heading"><div><div class="eyebrow">Operational pipeline</div><h1>From activity to investigation</h1><p class="subtitle">Original records, causal behavior, model scores and budgeted decisions.</p></div><span class="tag">CERT r4.2 · research prototype</span></div>
+    <div class="stats" id="run-stats">
+      <div class="stat"><span class="stat-label">Original records processed</span><strong id="records-count">—</strong><span class="stat-note">Committed ingestion</span></div>
+      <div class="stat"><span class="stat-label">Scored identity-days</span><strong id="scores-count">—</strong><span class="stat-note">Eligible observations</span></div>
+      <div class="stat"><span class="stat-label">Investigations admitted</span><strong id="cases-count">—</strong><span class="stat-note">One admission ≠ one incident</span></div>
+      <div class="stat"><span class="stat-label">Scored calendar days</span><strong id="days-count">—</strong><span class="stat-note">November 2010</span></div>
+    </div>
+    <div class="panel flow-panel"><div class="section-heading"><h2>What happens underneath</h2><span class="muted">Dataset time · chronological processing</span></div>
+      <ol class="pipeline-flow">
+        <li><span class="stage-number">01</span><h3>Ingest</h3><strong>5 activity sources</strong><p>CSV events + monthly LDAP</p></li>
+        <li><span class="stage-number">02</span><h3>Build history</h3><strong id="history-spec">28-day reference</strong><p>Daily counts · lagged context</p></li>
+        <li><span class="stage-number">03</span><h3>Score behavior</h3><strong id="model-spec">Random Forest</strong><p id="input-spec">33 transformed inputs</p></li>
+        <li><span class="stage-number">04</span><h3>Apply gate</h3><strong id="gate-spec">—</strong><p>Keep eligible scores above gate</p></li>
+        <li><span class="stage-number">05</span><h3>Admit cases</h3><strong id="budget-spec">1 per day</strong><p>Merge · cooldown · expiry</p></li>
+        <li><span class="stage-number">06</span><h3>Inspect evidence</h3><strong>Original records</strong><p>Measurements + versioned review</p></li>
+      </ol>
+      <div class="source-strip"><span class="muted">Activity</span><span>Logon</span><span>Device</span><span>File</span><span>Email</span><span>HTTP</span><span class="muted">Identity context</span><span>LDAP</span></div>
+    </div>
+    <div class="walkthrough panel"><div><h2>Walk through a recorded decision</h2><p>Step through November, then inspect the admitted case and its source records.</p></div><div class="action-group"><button class="button primary" id="open-demo">Replay recorded days <span aria-hidden="true">→</span></button><button class="button" id="example-case" disabled>Inspect EDB0714</button></div></div>
+    <div class="two-col">
+      <section class="panel"><div class="section-heading"><h2>Replay state</h2><button class="button small" id="refresh">Refresh</button></div><div id="runtime"></div><progress id="progress" max="100" value="0" aria-label="Committed original-record progress"></progress><p id="run-description" class="muted"></p><div class="action-group"><button class="button" id="start">Start / resume</button><button class="button" id="pause" disabled>Pause</button></div><details class="advanced"><summary>Advanced: create another operational run</summary><p>A new run keeps previous cases but changes the dashboard selection. It builds history from May; it is not a quick presentation reset.</p><button class="button" id="new">Create new run</button></details></section>
+      <section class="panel"><h2>Fixed scoring and queue policy</h2><dl class="facts" id="policy-facts"></dl><p class="note">Day replay reads recorded observations and decisions. It does not retrain, rescore or write to the application.</p></section>
+    </div>
+  </section>
+  <section id="demo-view" role="tabpanel" aria-labelledby="tab-demo" hidden>
+    <div class="page-heading"><div><div class="eyebrow">Presentation walkthrough</div><h1>Day-by-day pipeline replay</h1><p class="subtitle">Recorded scores and queue decisions from the completed original-event run.</p></div><span class="tag">Read-only playback</span></div>
+    <p id="demo-unavailable" class="notice" hidden></p>
+    <div id="demo-content" hidden>
+      <div class="panel playback-controls"><div><span class="eyebrow" id="demo-phase">Scoring day</span><h2 id="demo-date">—</h2><small id="demo-decision">—</small></div><div class="action-group"><button class="button" id="demo-reset">Reset</button><button class="button" id="demo-prev" aria-label="Previous playback day">←</button><button class="button primary" id="demo-play" aria-pressed="false">Play</button><button class="button" id="demo-next" aria-label="Next playback day">Next day →</button><label class="speed">Pace <select id="demo-speed"><option value="4000">4s / day</option><option value="2000" selected>2s / day</option><option value="1000">1s / day</option></select></label></div></div>
+      <div class="panel timeline-panel"><label class="sr-only" for="demo-range">Playback day</label><input type="range" id="demo-range" min="0" max="32" value="0"><div id="demo-timeline" class="day-timeline" aria-label="Recorded scoring days"></div></div>
+      <div id="demo-stages" class="demo-stages" aria-live="polite"></div>
+      <div class="two-col"><section class="panel"><div class="section-heading"><h2>Gate-passing offers</h2><span id="demo-gate" class="mono"></span></div><div id="demo-offers" class="table-wrap"></div></section><section class="panel"><div class="section-heading"><h2>Waiting after this decision</h2><span id="demo-pending-count" class="tag"></span></div><div id="demo-pending" class="table-wrap"></div></section></div>
+      <div class="two-col"><section class="panel"><h2>Recorded decision trace</h2><div id="demo-actions" class="decision-list"></div></section><section class="panel"><h2>Investigation admitted</h2><div id="demo-admitted"></div><details><summary>Measurements at scoring time</summary><div id="demo-measurements"></div></details></section></div>
+      <p class="note">Cached scores and the committed decision trace drive this playback; presentation speed only changes the display. Counts refer to eligible identity-days, not all original events. The last three steps drain the pending queue.</p>
+    </div>
+  </section>
+  <section id="cases-view" role="tabpanel" aria-labelledby="tab-cases" hidden>
+    <div class="page-heading"><div><div class="eyebrow">Committed cases</div><h1>Investigation workbench</h1><p class="subtitle">Inspect the score, personal history and original evidence behind each admission.</p></div><span id="case-total" class="tag">—</span></div>
+    <div class="panel"><div class="toolbar"><input id="search" type="search" aria-label="Search identities" placeholder="Search identity, e.g. EDB0714"><select id="filter" aria-label="Review status"><option value="all">All review statuses</option><option value="new">New</option><option value="in_review">In review</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option></select></div><div id="cases" class="table-wrap"></div><div class="pagination"><span id="page"></span><button id="previous" class="button">Previous</button><button id="next" class="button">Next</button></div></div>
+  </section>
+  <section id="results-view" role="tabpanel" aria-labelledby="tab-results" hidden>
+    <div class="page-heading"><div><div class="eyebrow">Frozen benchmark · November 2010</div><h1>Saved evaluation results</h1><p class="subtitle">Original research outcomes, separate from the current replay and analyst reviews.</p></div><span class="tag">Previously consumed evaluation</span></div>
+    <div id="result-cards" class="stats"></div><section class="panel"><h2>Operational comparison</h2><div id="results" class="table-wrap"></div><p id="status" class="notice"></p><p class="note">Timely reach requires relevant retained malicious evidence within 72 hours of that record. It is not model accuracy or necessarily detection within 72 hours of incident onset. Admissions approximate investigation cost; analyst effort was not measured.</p><details><summary>Protocol and limitations</summary><dl class="facts"><dt>Final fitting</dt><dd>8 June–14 October 2010</dd><dt>Calibration diagnostics</dt><dd>15–21 October 2010</dd><dt>Scoring period</dt><dd>1–30 November 2010, then queue drain</dd><dt>Feature contract</dt><dd>Frozen behavior-workload-v4</dd><dt>Label access</dt><dd>RF uses historical training labels; IF fitting is unsupervised</dd><dt>Independent validation</dt><dd>Future evaluation is still required</dd></dl><p>The historical three-day USB/copy magnitude target differs from its percentile target. This frozen application retains that contract; corrected optional experiments are saved separately on the experimental branch.</p></details></section>
+  </section>
+  <footer><span>SentinelID · academic &amp; development prototype</span><span>Records → identity-days → candidates → investigations</span></footer>
+</main>
+<div class="drawer-backdrop" id="backdrop" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="title" hidden>
+  <div class="drawer-head"><div><span class="eyebrow">Investigation</span><h2 id="title">Case</h2></div><button id="close" class="button" aria-label="Close investigation">Close <span aria-hidden="true">×</span></button></div>
+  <div id="case-content"></div>
+</aside>
+<script src="/workload.js"></script>
+</body>
+</html>

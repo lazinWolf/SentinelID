@@ -16,6 +16,7 @@ The current application implements operational replay and investigation. Earlier
 - Budgeted investigation admission with candidate merging, cooldown and expiry.
 - Atomic SQLite checkpoints, immutable cases and versioned analyst reviews.
 - A local dashboard exposing transformed model inputs, historical references and original source evidence.
+- Read-only day playback with play/pause, scrubbing, pending candidates and recorded queue decisions; a presentation mode and tabbed investigation panels.
 
 ```text
 CSV + LDAP → ordered records → daily history → features → model score
@@ -89,7 +90,9 @@ Prefix each command with `.venv/bin/python -m sentinelid`:
 | `replay` | Resume until completion |
 | `replay --checkpoint-on-pending` | Stop at a day boundary with candidates awaiting a decision |
 
-`--new` retains earlier runs but makes the new run current in the dashboard. New runs build history from May; scoring starts in November, so initial progress does not immediately produce alerts. For a midterm, use the saved completed demonstration. Pause takes effect between committed batches.
+`--new` retains earlier runs but makes the new run current in the dashboard. New runs build history from May; scoring starts in November, so initial progress does not immediately produce alerts. For a midterm, use the saved completed demonstration and **Day replay** for a quick walkthrough. Its Reset button changes only the playback position; it does not create a new run or change cases. Pause takes effect between committed batches for operational replay.
+
+The dashboard separates **Pipeline**, **Day replay**, **Investigations** and **Benchmark results**. Presentation mode enlarges text. Day replay reads stored scores and the committed decision trace, showing the same gate, merging, cooldown, expiry and admissions over November plus queue drain. It does not recompute predictions or evaluation, inject synthetic data or write application state. A fresh checkout needs a completed original-event replay before day playback is available. See [DEMO.md](DEMO.md) for a five-minute presentation.
 
 One writer owns a database at a time. Resume requires the same configuration identity. Changing `config.json` requires a separate run; it does not validate a new experiment. These commands neither retrain models nor recompute benchmark outcomes.
 

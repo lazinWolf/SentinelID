@@ -6,8 +6,11 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from .ingestion import ROOT
-from .pipeline import WorkloadReplay, configuration
+import joblib
+
+from .ingestion import ROOT, digest
+from .pipeline import WorkloadReplay, configuration, verify_model
+from .presentation import RunPresentation
 from .store import WorkloadStore
 
 
@@ -17,6 +20,18 @@ class WorkloadService:
         self.thread = None
         self.stop = threading.Event()
         self.error = None
+        self.config = configuration()
+        self.gate = None
+        self.input_names = []
+        self.readiness_error = None
+        try:
+            verify_model()
+            bundle = joblib.load(ROOT / self.config["deployment"]["model"])
+            self.gate = bundle["gates"][self.config["deployment"]["gate"]]
+            self.input_names = bundle["names"]
+        except (OSError, ValueError) as e:
+            self.readiness_error = str(e)
+        self.presentation = RunPresentation(self.store, self.config, self.gate, digest(ROOT / "config.json"))
 
     def summary(self):
         r = self.store.summary()
@@ -27,10 +42,21 @@ class WorkloadService:
                 fcntl.flock(probe, fcntl.LOCK_UN)
             except BlockingIOError:
                 external = True
-        r["ready"] = (ROOT / configuration()["deployment"]["model"]).is_file()
+        r["ready"] = self.gate is not None
+        r["readiness_error"] = self.readiness_error
         r["running"] = external or bool(self.thread and self.thread.is_alive())
         r["error"] = self.error
         r.update(json.loads((ROOT / "results.json").read_text()))
+        r["pipeline"] = {
+            "sources": self.config["sources"],
+            "gate": self.gate,
+            "input_names": self.input_names,
+            "queue": self.config["queue"],
+            "reference_days": self.config["reference_windows"][0],
+            "reference_lag_days": self.config["reference_lag_days"],
+            "scoring_period": self.config["final"],
+            "feature_contract": "behavior-workload-v4",
+        }
         return r
 
     def command(self, action):
@@ -98,6 +124,8 @@ class Handler(BaseHTTPRequestHandler):
                 )
             if url.path == "/api/case":
                 return self.send(SERVICE.store.detail(get("id"), max(0, int(get("offset", "0")))))
+            if url.path == "/api/demo":
+                return self.send(SERVICE.presentation.snapshot(int(get("step", "0"))))
             if url.path not in ["/", "/workload.js", "/style.css"]:
                 return self.send({"error": "Not found"}, 404)
             p = ROOT / "dashboard" / ("workload.html" if url.path == "/" else url.path[1:])

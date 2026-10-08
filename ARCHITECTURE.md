@@ -56,6 +56,7 @@ Eligibility precedes prediction. Eligible scores below the gate are still stored
 | Scoring and admission | `sentinelid/pipeline.py` | Eligible vectors → scores, candidates, admission decisions and cases |
 | Persistence | `sentinelid/store.py` | Checkpoints, observations and cases → atomic SQLite state; feedback → versioned reviews |
 | Local service | `sentinelid/server.py` | HTTP queries/commands → replay control, case inspection and review updates |
+| Presentation playback | `sentinelid/presentation.py` | Committed scores + checkpoint decision trace → read-only day frames and pending-state views |
 | Interface | `dashboard/` | Service responses → tables, measurements and original evidence |
 | Entry point | `sentinelid/__main__.py` | CLI arguments → verification, status, server or replay |
 
@@ -152,7 +153,9 @@ Evidence explains aggregate context; exact forest-to-event attribution is not co
 
 ## Current boundaries
 
-The app is a local research demonstration with a fixed benchmark horizon. Live identity-provider connectors, production authentication, automated retraining, an outage feed and a short checkpoint-based demo preset are not implemented. Archived full evaluation and current operational replay are distinct execution paths.
+The app is a local research demonstration with a fixed benchmark horizon. Live identity-provider connectors, production authentication, automated retraining and an outage feed are not implemented. Archived full evaluation and current operational replay are distinct execution paths.
+
+The presentation path is separate from original-event processing: `GET /api/demo?step=N` reads a completed run's observations and trusted checkpoint decision trace. It requires matching configuration identity, displays recorded gate-passing offers and queue actions, and verifies its reconstructed final pending state/admission count against the checkpoint and cases. It does not generate new decisions or write to SQLite. Playback contains 30 scoring days and three drain steps; reset and display speed are browser controls. Case inspection uses the same stored measurements and verified original evidence as before. This is recorded-run playback, not a fault-injection simulator or a fresh benchmark evaluation.
 
 ## Reproducible acquisition
 

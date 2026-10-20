@@ -110,8 +110,9 @@ def isolated_path(root, path):
     return target
 
 
-def capture_preservation(root):
-    path = root / "data/experiments/preservation-before.json"
+def capture_preservation(root, directory):
+    """Snapshot protected artifacts once per run; a resumed run keeps its original snapshot."""
+    path = directory / "preservation-before.json"
     if path.exists():
         return
     files = [

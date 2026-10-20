@@ -187,18 +187,16 @@ def resolve_evidence(root, directory, rows, configurations_run):
     }
 
 
-def preservation(root):
-    before = json.loads((root / "data/experiments/preservation-before.json").read_text())
+def preservation(root, directory):
+    before = json.loads((directory / "preservation-before.json").read_text())
     after = {name: digest(root / name) for name in before}
-    expected = {"sentinelid/__main__.py", "sentinelid/pipeline.py"}
-    unexpected = [name for name in before if before[name] != after[name] and name not in expected]
+    unexpected = [name for name in before if before[name] != after[name]]
     if unexpected:
-        raise ValueError("Protected artifacts changed: " + ", ".join(unexpected))
+        raise ValueError("Protected artifacts changed during the run: " + ", ".join(unexpected))
     return {
         "before": before,
         "after": after,
         "protected_unchanged": sum(before[name] == after[name] for name in before),
-        "expected_source_extension_points": sorted(expected),
         "unexpected_changes": unexpected,
         "active_database_model_configuration_results_sources_archive_unchanged": True,
     }
@@ -359,7 +357,6 @@ def run(config_path, resume=False, stop_after_days=None, root=ROOT):
         < p["fit_end"]
     ):
         raise ValueError("Held-out blocks must follow their fitting data")
-    capture_preservation(root)
     inputs, input_manifest = restore_inputs(root)
     code = {path.name: digest(path) for path in sorted((root / "sentinelid").glob("*.py"))}
     declaration = {
@@ -390,6 +387,7 @@ def run(config_path, resume=False, stop_after_days=None, root=ROOT):
             raise ValueError("Experiment exists; use --resume")
         if not declaration_path.exists():
             save_json(declaration_path, declaration)
+        capture_preservation(root, directory)
         print("Experiment:", directory, flush=True)
         old, rows, context = baseline(inputs, root)
         save_json(directory / "historical-preservation.json", old)
@@ -528,7 +526,7 @@ def run(config_path, resume=False, stop_after_days=None, root=ROOT):
             return directory
         evidence = resolve_evidence(root, directory, rows, outputs)
         save_json(directory / "evidence-verification.json", evidence)
-        audit = preservation(root)
+        audit = preservation(root, directory)
         save_json(directory / "preservation.json", audit)
         reports(root, directory, configs, results, manifests)
         save_json(

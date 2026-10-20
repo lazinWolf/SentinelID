@@ -1,0 +1,202 @@
+{
+  "schema": "sentinelid-research-v1",
+  "output": "backtest-unsupervised",
+  "report": "reports/BACKTEST-UNSUPERVISED.md",
+  "round_note": "Label-free detectors only (labels used for evaluation and selection, never fitting). The Dec 2010-May 2011 holdout was already opened once, so any later holdout look is exploratory. Round 2 adds channel-level aggregation (each behavior's strongest horizon counts once) and weekend/weekday reference contexts, after round 1 showed redundant USB/copy inputs and weekend days dominating benign flags. Round 3 (final) adds causal per-identity self-calibration: each score minus that identity's own prior 28-day median or 90th percentile score.",
+  "fit_start": "2010-06-08",
+  "gate_quantile": 0.99,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "folds": [
+    {
+      "start": "2010-08-01",
+      "end": "2010-09-01"
+    },
+    {
+      "start": "2010-09-01",
+      "end": "2010-10-01"
+    },
+    {
+      "start": "2010-10-01",
+      "end": "2010-11-01"
+    },
+    {
+      "start": "2010-11-01",
+      "end": "2010-12-01"
+    }
+  ],
+  "baseline": "if",
+  "selection_rule": "Highest mean timely incidents summed over folds, among candidates with mean admissions no greater than the baseline and mean current-positive yield no lower; ties broken by yield.",
+  "candidates": [
+    {
+      "name": "if",
+      "features": "c",
+      "model": "if",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "if256",
+      "features": "c",
+      "model": "if256",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "if_up",
+      "features": "c",
+      "model": "if",
+      "policy": "max_cooldown",
+      "transform": "up"
+    },
+    {
+      "name": "if_up_movement",
+      "features": "c",
+      "model": "if",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "subset": "movement"
+    },
+    {
+      "name": "ecod",
+      "features": "c",
+      "model": "ecod",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "ecod_up",
+      "features": "c",
+      "model": "ecod",
+      "policy": "max_cooldown",
+      "transform": "up"
+    },
+    {
+      "name": "ecod_up_top5",
+      "features": "c",
+      "model": "ecod_top5",
+      "policy": "max_cooldown",
+      "transform": "up"
+    },
+    {
+      "name": "ecod_up_movement",
+      "features": "c",
+      "model": "ecod",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "subset": "movement"
+    },
+    {
+      "name": "ecod_up_movement_top5",
+      "features": "c",
+      "model": "ecod_top5",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "subset": "movement"
+    },
+    {
+      "name": "ecod_up_peer",
+      "features": "c_peer",
+      "model": "ecod",
+      "policy": "max_cooldown",
+      "transform": "up"
+    },
+    {
+      "name": "ecod_up_temporal_peer_movement",
+      "features": "c_temporal_peer",
+      "model": "ecod",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "subset": "movement"
+    },
+    {
+      "name": "if_up_peer_movement",
+      "features": "c_peer",
+      "model": "if",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "subset": "movement"
+    },
+    {
+      "name": "ecodc_up",
+      "features": "c",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "ecodc"
+    },
+    {
+      "name": "ecodc2_up",
+      "features": "c",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "ecodc2"
+    },
+    {
+      "name": "ecodc3_up",
+      "features": "c",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "ecodc3"
+    },
+    {
+      "name": "ecod_up_top5_wk",
+      "features": "c",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "ecod_top5_wk"
+    },
+    {
+      "name": "ecodc2_up_wk",
+      "features": "c",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "ecodc2_wk"
+    },
+    {
+      "name": "ecodc3_up_wk",
+      "features": "c",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "ecodc3_wk"
+    },
+    {
+      "name": "if_up_wk",
+      "features": "c",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "if_wk"
+    },
+    {
+      "name": "ecodc3_up_peer_wk",
+      "features": "c_peer",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "ecodc3_wk"
+    },
+    {
+      "name": "ecod_up_top5_selfmed",
+      "features": "c",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "ecod_top5",
+      "calibrate": "user_median"
+    },
+    {
+      "name": "ecod_up_top5_selfq90",
+      "features": "c",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "ecod_top5",
+      "calibrate": "user_q90"
+    },
+    {
+      "name": "if_up_selfmed",
+      "features": "c",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "model": "if",
+      "calibrate": "user_median"
+    }
+  ],
+  "round": 3
+}

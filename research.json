@@ -1,0 +1,154 @@
+{
+  "schema": "sentinelid-research-v1",
+  "fit_start": "2010-06-08",
+  "gate_quantile": 0.99,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "folds": [
+    {
+      "start": "2010-08-01",
+      "end": "2010-09-01"
+    },
+    {
+      "start": "2010-09-01",
+      "end": "2010-10-01"
+    },
+    {
+      "start": "2010-10-01",
+      "end": "2010-11-01"
+    },
+    {
+      "start": "2010-11-01",
+      "end": "2010-12-01"
+    }
+  ],
+  "baseline": "deployed_recipe",
+  "selection_rule": "Highest mean timely incidents summed over folds, among candidates with mean admissions no greater than the baseline and mean current-positive yield no lower; ties broken by yield.",
+  "candidates": [
+    {
+      "name": "deployed_recipe",
+      "features": "v4",
+      "model": "rf",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "corrected",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "corrected_peer",
+      "features": "c_peer",
+      "model": "rf",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "corrected_temporal",
+      "features": "c_temporal",
+      "model": "rf",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "corrected_temporal_peer",
+      "features": "c_temporal_peer",
+      "model": "rf",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "corrected_rf500",
+      "features": "c",
+      "model": "rf500",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "corrected_peer_rf500",
+      "features": "c_peer",
+      "model": "rf500",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "corrected_hgb",
+      "features": "c",
+      "model": "hgb",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "corrected_peer_hgb",
+      "features": "c_peer",
+      "model": "hgb",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "corrected_peer_reopen",
+      "features": "c_peer",
+      "model": "rf",
+      "policy": "max_cooldown_reopen"
+    },
+    {
+      "name": "corrected_if",
+      "features": "c",
+      "model": "if",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "rank_sum",
+      "features": "v4",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "rank": "sum"
+    },
+    {
+      "name": "rank_count",
+      "features": "v4",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "rank": "count"
+    },
+    {
+      "name": "cooldown3",
+      "features": "v4",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "queue": {
+        "cooldown_days": 3
+      }
+    },
+    {
+      "name": "expiry5",
+      "features": "v4",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "queue": {
+        "backlog_days": 5
+      }
+    },
+    {
+      "name": "rank_sum_cooldown3",
+      "features": "v4",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "rank": "sum",
+      "queue": {
+        "cooldown_days": 3
+      }
+    },
+    {
+      "name": "hgb_rank_sum",
+      "features": "c",
+      "model": "hgb",
+      "policy": "max_cooldown",
+      "rank": "sum"
+    }
+  ],
+  "round": 2,
+  "round_note": "Round 1 (model/feature candidates) found no improvement over the deployed recipe; 12 of 15 development misses were queue losses (expiry, cooldown, late admission). Round 2 adds fixed-budget admission-policy variants on the deployed recipe.",
+  "holdout_secondary": [
+    "corrected_hgb",
+    "hgb_rank_sum"
+  ],
+  "holdout_note": "Primary: deployed frozen model vs the selected candidate (refit Jun-Nov, 5 seeds). Secondary comparators are declared before any holdout label is read and cannot be claimed as the selected winner."
+}

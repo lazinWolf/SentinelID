@@ -96,6 +96,8 @@ def select_csv(part, target, descriptor, start, end):
             writer.writerow(header)
             while line := raw.readline():
                 if not line.endswith(b"\n"):
+                    if descriptor.get("through_end_of_file"):
+                        raise ValueError("Range ends inside a record: " + str(target))
                     break
                 row = next(csv.reader([line.decode("utf-8-sig")]))
                 if len(row) != len(header):
@@ -109,6 +111,7 @@ def select_csv(part, target, descriptor, start, end):
                 if start <= stamp < end:
                     writer.writerow(row)
                     count += 1
+        after |= bool(descriptor.get("through_end_of_file"))
         if not before or not after or count != descriptor["rows"]:
             raise ValueError(f"Incomplete selection boundaries or row count: {target}")
         if not matches(temporary, descriptor["selected_sha256"], descriptor["selected_bytes"]):
@@ -118,7 +121,7 @@ def select_csv(part, target, descriptor, start, end):
         temporary.unlink(missing_ok=True)
 
 
-def setup(root=ROOT, sources=None, model_only=False, accept_data_license=False):
+def setup(root=ROOT, sources=None, model_only=False, accept_data_license=False, holdout=False):
     manifest = json.loads((root / "setup-manifest.json").read_text())
     config = json.loads((root / "config.json").read_text())
     if manifest["model_sha256"] != config["deployment"]["sha256"]:
@@ -153,10 +156,14 @@ def setup(root=ROOT, sources=None, model_only=False, accept_data_license=False):
         if model_only:
             return
         selected = set(sources or config["sources"])
-        for section, shard in [("prefix", "recovery-v3"), ("extension", "workload-v4")]:
+        shards = [("prefix", "recovery-v3"), ("extension", "workload-v4")]
+        if holdout:
+            # Sealed research period; the deployed application never reads it.
+            shards.append(("holdout", "holdout-v5"))
+        for section, shard in shards:
             spec = manifest[section]
             start = datetime.fromisoformat(
-                spec["start"] if section == "prefix" else spec["prefix_end"]
+                spec["prefix_end"] if section == "extension" else spec["start"]
             )
             end = datetime.fromisoformat(
                 spec["end_exclusive"] if section == "prefix" else spec["end"]

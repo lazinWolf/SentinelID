@@ -28,6 +28,7 @@ from sentinelid.experiment_io import capture_preservation, isolated_path
 from sentinelid.experiment_models import configurations, train
 from sentinelid.experiment_queue import ExperimentQueue
 from sentinelid.experiment_replay import ExperimentReplay
+from sentinelid.experiments import preservation
 from sentinelid.pipeline import WorkloadQueue, matrix
 
 
@@ -372,13 +373,16 @@ class ReportSafetyTests(unittest.TestCase):
         self.assertEqual(result["pre_ranking_excluded_positive_days"], 1)
         self.assertEqual(result["candidate_keys"], [])
 
-    def test_first_run_preservation_capture_is_non_overwriting(self):
+    def test_run_preservation_capture_is_non_overwriting(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            run = root / "data/experiments/run"
             (root / "config.json").write_text("original")
-            capture_preservation(root)
-            marker = root / "data/experiments/preservation-before.json"
+            capture_preservation(root, run)
+            marker = run / "preservation-before.json"
             old = marker.read_bytes()
             (root / "config.json").write_text("changed")
-            capture_preservation(root)
+            capture_preservation(root, run)
             self.assertEqual(marker.read_bytes(), old)
+            with self.assertRaisesRegex(ValueError, "config.json"):
+                preservation(root, run)

@@ -255,5 +255,130 @@
     "events": 14143645,
     "selection": "all identities/all5sources, continuous disjoint date shards, no answer access",
     "integrity_limit": "local ranges/boundaries verified; full official archive equality not certified"
+  },
+  "holdout": {
+    "schema": "sealed-holdout-source-v5",
+    "start": "2010-12-01T00:00:00",
+    "end": "2011-05-17T00:00:00",
+    "selection": "All identities and all five sources from 2010-12-01 through the end of the mirrored r4.2 files; byte ranges located by timestamp only, independent of answer labels",
+    "sources": [
+      {
+        "source": "device",
+        "url": "https://huggingface.co/datasets/jinmang2/cert_insider_threat/resolve/010e4562bb025ea15ea73c7a1f9231037b237ad2/r4.2/device.csv",
+        "mirror_full_size": 28982749,
+        "mirror_full_sha256": "39925627f0219c77dbb39e5a416715298ef47c2fd25322aa44c66cb128d7291d",
+        "byte_range_inclusive": [
+          19764746,
+          28982748
+        ],
+        "range_sha256": "0a43ec3b68ece48546922be8fdecabc109f06fd98295ab79b679068c2d18ad71",
+        "selected_sha256": "8a4ab9217e0b5fbfe856a32e966dad4a93c3f7fd602840dd1ab5341d820508e4",
+        "selected_bytes": 8703857,
+        "rows": 121740,
+        "last_record": "2011-05-16T23:22:34",
+        "through_end_of_file": true,
+        "header": "id,date,user,pc,activity"
+      },
+      {
+        "source": "email",
+        "url": "https://huggingface.co/datasets/jinmang2/cert_insider_threat/resolve/010e4562bb025ea15ea73c7a1f9231037b237ad2/r4.2/email.csv",
+        "mirror_full_size": 1362101939,
+        "mirror_full_sha256": "2ac157015873ce139f515b931ed83c6140fcd77cee3568565bea7335b318087f",
+        "byte_range_inclusive": [
+          934407820,
+          1362101938
+        ],
+        "range_sha256": "978543185e65f4a3420f3a240fa5c550db1aa90705341fdfbd3f4f4d5274249c",
+        "selected_sha256": "2e3be987f43be4ea86ccff0e3907102dc06a12b3ae09690a671ccbcbdadad248",
+        "selected_bytes": 425058466,
+        "rows": 819474,
+        "last_record": "2011-05-16T21:16:26",
+        "through_end_of_file": true,
+        "header": "id,date,user,pc,to,cc,bcc,from,size,attachments,content"
+      },
+      {
+        "source": "file",
+        "url": "https://huggingface.co/datasets/jinmang2/cert_insider_threat/resolve/010e4562bb025ea15ea73c7a1f9231037b237ad2/r4.2/file.csv",
+        "mirror_full_size": 193055265,
+        "mirror_full_sha256": "637281bd6d8947b2cccf90bca7096e8cfad711eab1e425c61f886b0e4edfda7f",
+        "byte_range_inclusive": [
+          133355048,
+          193055264
+        ],
+        "range_sha256": "4674a6495b265f1790823eeccca73bd080f7cf52860ed7e44084df7b8e04d8bd",
+        "selected_sha256": "173a5b5f1123040f0aede1423f4c50d8c3c8819a9a409a6ec2cec3b9cd242d3a",
+        "selected_bytes": 59356386,
+        "rows": 136444,
+        "last_record": "2011-05-16T23:22:34",
+        "through_end_of_file": true,
+        "header": "id,date,user,pc,filename,content"
+      },
+      {
+        "source": "http",
+        "url": "https://huggingface.co/datasets/jinmang2/cert_insider_threat/resolve/010e4562bb025ea15ea73c7a1f9231037b237ad2/r4.2/http.csv",
+        "mirror_full_size": 14536257467,
+        "mirror_full_sha256": "30c779a3c98d243650e65b6ac77f90327e5b4f0b8a9feb26a55f030f6fa2fb39",
+        "byte_range_inclusive": [
+          9985111710,
+          14536257466
+        ],
+        "range_sha256": "ea7e281f35cbb94f36a51ecb9a50b701aeea61e47f473ad1fa66e356d9a2236a",
+        "selected_sha256": "bed8327ce03e55590ca9670d66925af66c37f32776bedc85473a70e78cb44dc4",
+        "selected_bytes": 4528119458,
+        "rows": 8850507,
+        "last_record": "2011-05-16T21:23:10",
+        "through_end_of_file": true,
+        "header": "id,date,user,pc,url,content"
+      },
+      {
+        "source": "logon",
+        "url": "https://huggingface.co/datasets/jinmang2/cert_insider_threat/resolve/010e4562bb025ea15ea73c7a1f9231037b237ad2/r4.2/logon.csv",
+        "mirror_full_size": 58514706,
+        "mirror_full_sha256": "a770601339829d544535b3cb08b2f2020a1feaa81bd88cdbfc2d452444f12a13",
+        "byte_range_inclusive": [
+          40127161,
+          58514705
+        ],
+        "range_sha256": "c5cf7aa72fb85c53014f106bb9879fa7023f06f384d70d845a04fee2357ee114",
+        "selected_sha256": "75fd8c45fc29a3c94304313b6989fea19d342db821e07655c41da3a78d81ad52",
+        "selected_bytes": 17895208,
+        "rows": 261447,
+        "last_record": "2011-05-17T06:43:35",
+        "through_end_of_file": true,
+        "header": "id,date,user,pc,activity"
+      }
+    ],
+    "monthly_metadata": [
+      {
+        "month": "2010-12",
+        "sha256": "13b7c55b70caeeaadf2bc45aa0687ab04d4574744c460ce293d3c07eb4d061f2",
+        "bytes": 133013
+      },
+      {
+        "month": "2011-01",
+        "sha256": "960bc490df5a633075fdc81de3a385265e8112c33c7cddfc50bb49d5cbe47d98",
+        "bytes": 131252
+      },
+      {
+        "month": "2011-02",
+        "sha256": "2e80c55fd8036b4227ab9f06ca3226f8c39740a4981fcfa2a3f62d1f861dce02",
+        "bytes": 129745
+      },
+      {
+        "month": "2011-03",
+        "sha256": "203d28794337e29dada2b1a89ff729bfa0bbb816ad8586fb15572c5804ff5355",
+        "bytes": 128111
+      },
+      {
+        "month": "2011-04",
+        "sha256": "456e5ec9764b720239676dbb307189c2a61ae1d1ac01472dade7f67e6032c53e",
+        "bytes": 126430
+      },
+      {
+        "month": "2011-05",
+        "sha256": "8c2b10167010c5aa04fe5f145f02094cc5598dfc5b6008fa6c17a37ad3bdee71",
+        "bytes": 126274
+      }
+    ]
   }
 }

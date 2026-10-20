@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from pathlib import Path
 
 from .ingestion import ROOT
 
@@ -15,6 +16,9 @@ def main():
     acquisition.add_argument("--accept-data-license", action="store_true")
     acquisition.add_argument("--model-only", action="store_true")
     acquisition.add_argument(
+        "--holdout", action="store_true", help="Also acquire the sealed Dec 2010-May 2011 shard"
+    )
+    acquisition.add_argument(
         "--sources", nargs="+", choices=["device", "logon", "email", "file", "http"]
     )
     experiment = commands.add_parser(
@@ -27,6 +31,11 @@ def main():
         type=int,
         help="Checkpoint each configuration after this many additional days",
     )
+    research = commands.add_parser(
+        "research", help="Development backtest and once-only sealed holdout evaluation"
+    )
+    research.add_argument("stage", choices=["extract", "backtest", "holdout"])
+    research.add_argument("--config", default="research.json")
     commands.add_parser("status", help="Show persisted progress and the selected model")
     verify = commands.add_parser(
         "verify", help="Verify the deployed model and required source files"
@@ -51,6 +60,7 @@ def main():
                 sources=args.sources,
                 model_only=args.model_only,
                 accept_data_license=args.accept_data_license,
+                holdout=args.holdout,
             )
         elif args.command == "experiment":
             from .experiments import run
@@ -58,6 +68,18 @@ def main():
             if args.stop_after_days is not None and args.stop_after_days < 1:
                 raise ValueError("--stop-after-days must be positive")
             run(args.config, args.resume, args.stop_after_days)
+        elif args.command == "research":
+            from . import research
+
+            if args.stage == "extract":
+                research.extract_holdout()
+                print("Archive-equal rebuilt rows:", research.check_extraction(), flush=True)
+                research.prepare()
+            elif args.stage == "backtest":
+                print(json.dumps(research.backtest(args.config)["selected"]))
+            else:
+                config = json.loads(Path(args.config).read_text())
+                research.holdout(output=config.get("output", "backtest"))
         elif args.command == "status":
             from .store import WorkloadStore
 

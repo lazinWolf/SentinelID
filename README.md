@@ -188,3 +188,15 @@ With the local research archive and prepared sources available:
 ```
 
 This runs separate eight-configuration RF/IF matrices for temporal, peer and relevance-ranking options. Historical results stay outside the corrected tables; PCA is excluded. Structured module measurements and separate detector/priority values are persisted. See [the experiment guide](EXPERIMENTS.md) for prerequisites, protocol and limitations. The public clone does not include archived research inputs.
+
+## Development backtest and sealed holdout
+
+`setup --accept-data-license --holdout` adds the December 2010 - May 2011 period, sealed from all development. Then:
+
+```bash
+.venv/bin/python -m sentinelid research extract    # rebuild holdout rows, verify against the archive, cache vectors
+.venv/bin/python -m sentinelid research backtest   # rolling June-November folds; predeclared selection
+.venv/bin/python -m sentinelid research holdout    # once only: freeze scorers, then read holdout labels
+```
+
+The deployed model reached 16 of 18 insiders who start after December 1 ([holdout](reports/HOLDOUT.md)). No supervised variant beat it in development ([backtest](reports/BACKTEST.md)). The best label-free detector improved on Isolation Forest but stays well below supervised detection ([backtest](reports/BACKTEST-UNSUPERVISED.md), [exploratory holdout](reports/HOLDOUT-UNSUPERVISED.md)). See [research progression](EXPERIMENT_HISTORY.md).

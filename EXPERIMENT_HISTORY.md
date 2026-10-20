@@ -43,6 +43,31 @@ No independent validation period is available, so validated improvement remains 
 
 An earlier implementation attempt is retained at `data/experiments/394f4f5f36e57f7b32b7/`: its models were fitted, all variants checkpointed, and the first completed queue exposed a NumPy-to-JSON report error. That run has no complete comparison. The error was fixed and tested before the completed versioned run; no failed or partial result was inserted into the final matrix.
 
+## Development backtest and sealed holdout (October 2026)
+
+The optional-module verdict above rested on 11 November incidents. Two additions replace it with larger and independent evidence.
+
+**Sealed holdout data.** `setup --holdout` acquires the remaining CERT r4.2 period, 2010-12-01 to 2011-05-17 (10.19M records; 18 insiders who start after December 1). Rows rebuilt from originals equal the archived cache on overlapping days, and the deployed model's November scores reproduce exactly.
+
+**Development backtest** ([report](reports/BACKTEST.md)). Rolling monthly folds August-November (61 incident-folds, 3 seeds) refit each candidate on earlier development days. 17 supervised candidates, covering features, models and admission policy, were compared under a predeclared rule. None beat the deployed recipe (45.3/61 timely):
+
+- The corrected three-day target scored 44.3; the defect is harmless in practice.
+- Peers scored 41.0. Their November-only gain was noise.
+- HistGradientBoosting scored 45.7 with more admissions.
+- Persistence ranking, a 3-day cooldown and a 5-day expiry all reduced timely reach.
+
+Of 15 development misses, 12 were queue losses (expiry, cooldown, late admission), not detector gate losses.
+
+**Sealed holdout** ([report](reports/HOLDOUT.md)). All scorers were fitted and frozen before holdout labels were read, and the evaluation ran once. The deployed model reached 20/24 incidents and **16/18 fresh insiders**, with 93% gate recall and a median of 49 hours from onset. Recipe refits reached 14-16 fresh insiders. The secondary HistGradientBoosting comparators fell to AP 0.60 against RF's 0.82, so their development near-tie did not generalise.
+
+**Label-free detectors** ([backtest](reports/BACKTEST-UNSUPERVISED.md), [holdout](reports/HOLDOUT-UNSUPERVISED.md)). Three rounds and 23 variants were tried.
+
+- One-sided inputs with ECOD-style upper-tail rarity, keeping each day's five strongest rarities (`ecod_up_top5`), raised development timely reach from 22.3 to 28.0/61.
+- On the holdout, `ecod_up_top5` reached 15/24 incidents against Isolation Forest's 7-12, and 12/18 fresh insiders against 6-10.
+- Channel aggregation, weekday/weekend references, peers and per-identity self-calibration did not help. Self-calibration erased sustained scenario-2 signals.
+- The holdout use for the label-free detectors is an **exploratory reuse**: the data had already been evaluated for the supervised selection.
+- Label-free scoring remains far below supervised detection on this benchmark.
+
 ## Progression rules
 
 - Preserve historical source/artifact hashes and consumed outcomes.

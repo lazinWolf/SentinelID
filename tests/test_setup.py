@@ -77,3 +77,24 @@ class SetupTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 select_csv(part, target, descriptor, datetime(2010, 5, 1), datetime(2010, 5, 2))
             self.assertEqual(target.read_bytes(), expected)
+
+    def test_holdout_selection_runs_through_end_of_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            part = Path(directory) / "range"
+            target = Path(directory) / "selected.csv"
+            part.write_bytes(b"partial\nid,11/30/2010 12:00:00,u\nid,12/01/2010 12:00:00,u\n")
+            expected = b"id,date,user\r\nid,12/01/2010 12:00:00,u\r\n"
+            descriptor = {
+                "header": "id,date,user",
+                "rows": 1,
+                "selected_bytes": len(expected),
+                "selected_sha256": hashlib.sha256(expected).hexdigest(),
+                "through_end_of_file": True,
+            }
+            select_csv(part, target, descriptor, datetime(2010, 12, 1), datetime(2011, 5, 17))
+            self.assertEqual(target.read_bytes(), expected)
+            part.write_bytes(part.read_bytes() + b"id,12/02/2010 12:00:00,u")
+            target.unlink()
+            with self.assertRaisesRegex(ValueError, "inside a record"):
+                select_csv(part, target, descriptor, datetime(2010, 12, 1), datetime(2011, 5, 17))
+            self.assertFalse(target.exists())

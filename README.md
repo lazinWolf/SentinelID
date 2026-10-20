@@ -129,18 +129,20 @@ The saved replay processed **14,143,645 original records**, produced **18,772 sc
 ## Project structure
 
 ```text
-sentinelid/                # Ingestion, features, scoring/queue/replay, store, server and CLI
+sentinelid/                # Ingestion, features, scoring/queue/replay, store, server, research and CLI
 dashboard/                # HTML, JavaScript and CSS investigation interface
-tests/                    # Pipeline and acquisition regressions
+tests/                    # Pipeline, acquisition, experiment and research regressions
+configs/                  # Experiment, backtest and feedback protocols
+reports/                  # Generated experiment, backtest, holdout and feedback reports
 setup-manifest.json       # Pinned URLs, byte ranges, row counts and checksums
-.github/workflows/ci.yml  # Dataset-free unit test workflow
+.github/workflows/ci.yml  # Lint, formatting and dataset-free unit tests
 config.json               # Runtime settings and selected model identity
 results.json              # Saved comparison and measured verdict
 ARCHITECTURE.md            # Pipeline, research boundary and recovery diagrams
-DEMO.md                    # Midterm walkthrough and discussion notes
 requirements.txt          # Exact dependency versions for the saved model
 pyproject.toml            # Project metadata and lint configuration
-data/                     # Local only: originals, model and application state
+data/                     # Local only: originals, model, application and research state
+DEMO.md, present*.md      # Local only: presentation notes
 archive/                  # Local only: recoverable historical work
 ```
 
@@ -182,9 +184,9 @@ The deployed application retains its frozen historical contract, including the n
 With the local research archive and prepared sources available:
 
 ```bash
-.venv/bin/python -m sentinelid experiment --config experiments.json
+.venv/bin/python -m sentinelid experiment --config configs/experiments.json
 # Resume an interrupted experiment:
-.venv/bin/python -m sentinelid experiment --config experiments.json --resume
+.venv/bin/python -m sentinelid experiment --config configs/experiments.json --resume
 ```
 
 This runs separate eight-configuration RF/IF matrices for temporal, peer and relevance-ranking options. Historical results stay outside the corrected tables; PCA is excluded. Structured module measurements and separate detector/priority values are persisted. See [the experiment guide](EXPERIMENTS.md) for prerequisites, protocol and limitations. The public clone does not include archived research inputs.
@@ -197,6 +199,11 @@ This runs separate eight-configuration RF/IF matrices for temporal, peer and rel
 .venv/bin/python -m sentinelid research extract    # rebuild holdout rows, verify against the archive, cache vectors
 .venv/bin/python -m sentinelid research backtest   # rolling June-November folds; predeclared selection
 .venv/bin/python -m sentinelid research holdout    # once only: freeze scorers, then read holdout labels
+.venv/bin/python -m sentinelid research feedback   # label-free start with simulated analyst verdicts
 ```
 
+Protocols live in `configs/`; pass `--config configs/research-unsupervised.json` for the label-free study, and `research feedback --holdout` for the exploratory feedback continuation.
+
 The deployed model reached 16 of 18 insiders who start after December 1 ([holdout](reports/HOLDOUT.md)). No supervised variant beat it in development ([backtest](reports/BACKTEST.md)). The best label-free detector improved on Isolation Forest but stays well below supervised detection ([backtest](reports/BACKTEST-UNSUPERVISED.md), [exploratory holdout](reports/HOLDOUT-UNSUPERVISED.md)). See [research progression](EXPERIMENT_HISTORY.md).
+
+Analyst feedback closes much of the gap without any initial labels. Starting from the label-free detector and learning only from verdicts on the cases it admits, the detector reached 40/61 development incidents against 29 without learning. In an exploratory holdout continuation it reached 16/18 new insiders with half the deployed model's investigations ([feedback](reports/FEEDBACK.md)). The analyst is simulated from the answer key.

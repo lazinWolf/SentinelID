@@ -193,7 +193,9 @@ class OptionalQueueTests(unittest.TestCase):
 
 class RankingTrainingTests(unittest.TestCase):
     def test_held_out_predictions_and_training_only_scaler(self):
-        config = json.loads((Path(__file__).resolve().parents[1] / "experiments.json").read_text())
+        config = json.loads(
+            (Path(__file__).resolve().parents[1] / "configs/experiments.json").read_text()
+        )
         protocol = config["protocol"]
         row, daily = fixture()
         fixed = corrected(row, daily)

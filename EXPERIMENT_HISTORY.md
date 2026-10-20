@@ -68,6 +68,16 @@ Of 15 development misses, 12 were queue losses (expiry, cooldown, late admission
 - The holdout use for the label-free detectors is an **exploratory reuse**: the data had already been evaluated for the supervised selection.
 - Label-free scoring remains far below supervised detection on this benchmark.
 
+## Analyst-feedback learning (October 2026)
+
+Active Anomaly Discovery-style learning from a label-free start ([report](reports/FEEDBACK.md); `configs/research-feedback.json`).
+
+- **Method.** The detector begins as `ecod_up_top5`. Each day's admitted investigation receives a simulated analyst verdict: positive if its trigger records contain a labelled malicious record. Non-negative weights on the 33 per-input rarities plus the top-5 sum are refit with an L2 pull toward the label-free prior. Unadmitted identity-days never contribute labels.
+- **Development (August-November, one continuous queue).** With λ = 0.3, timely reach was 40/61 against 29/61 without learning. Current-positive yield rose from 0.28 to 0.69, with fewer investigations (102 vs 120). November matched the supervised fold result. The predeclared criterion (beat the no-learning control without lowering yield) was met.
+- **Learned weights.** Weight moved from the USB/copy-heavy prior to the HTTP-volume percentile, then new hosts/domains and message bytes.
+- **Exploratory holdout continuation.** This was the third use of the December-May holdout. Feedback reached 19/24 incidents and 16/18 fresh insiders with 82-83 investigations, against the deployed RF's 20/24 and 16/18 with 158.
+- **Limits.** The analyst is perfect and simulated. About half the daily budget went unused because the learned score concentrates on fewer identities. Ranking AP (0.19-0.26) stays below the RF's 0.82.
+
 ## Progression rules
 
 - Preserve historical source/artifact hashes and consumed outcomes.

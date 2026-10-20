@@ -34,8 +34,14 @@ def main():
     research = commands.add_parser(
         "research", help="Development backtest and once-only sealed holdout evaluation"
     )
-    research.add_argument("stage", choices=["extract", "backtest", "holdout"])
-    research.add_argument("--config", default="research.json")
+    research.add_argument("stage", choices=["extract", "backtest", "holdout", "feedback"])
+    research.add_argument(
+        "--config",
+        help="Default: configs/research.json (configs/research-feedback.json for feedback)",
+    )
+    research.add_argument(
+        "--holdout", action="store_true", help="feedback: exploratory holdout continuation"
+    )
     commands.add_parser("status", help="Show persisted progress and the selected model")
     verify = commands.add_parser(
         "verify", help="Verify the deployed model and required source files"
@@ -75,10 +81,19 @@ def main():
                 research.extract_holdout()
                 print("Archive-equal rebuilt rows:", research.check_extraction(), flush=True)
                 research.prepare()
+            elif args.stage == "feedback":
+                from . import feedback
+
+                config = args.config or feedback.DEFAULT_CONFIG
+                (feedback.holdout if args.holdout else feedback.run)(config)
             elif args.stage == "backtest":
-                print(json.dumps(research.backtest(args.config)["selected"]))
+                print(
+                    json.dumps(
+                        research.backtest(args.config or research.DEFAULT_CONFIG)["selected"]
+                    )
+                )
             else:
-                config = json.loads(Path(args.config).read_text())
+                config = json.loads(Path(args.config or research.DEFAULT_CONFIG).read_text())
                 research.holdout(output=config.get("output", "backtest"))
         elif args.command == "status":
             from .store import WorkloadStore

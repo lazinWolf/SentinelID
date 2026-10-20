@@ -161,7 +161,9 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(channel("peer_usb_percentile"), "peer_usb")
         train = np.zeros((9, 3))
         model = TailScorer(names=names).fit(train)
-        usb_only, usb_and_http = -model.score_samples(np.asarray([[1.0, 1.0, 0.0], [1.0, 0.0, 1.0]]))
+        usb_only, usb_and_http = -model.score_samples(
+            np.asarray([[1.0, 1.0, 0.0], [1.0, 0.0, 1.0]])
+        )
         self.assertLess(usb_only, usb_and_http)
 
     def test_self_calibration_uses_only_prior_days_of_same_identity(self):
@@ -216,4 +218,6 @@ class ResearchTests(unittest.TestCase):
             self.assertEqual(
                 [p.name for p in (root / "reports").iterdir()], ["HOLDOUT-UNSUPERVISED.md"]
             )
-            self.assertIn("Exploratory reuse", (root / "reports/HOLDOUT-UNSUPERVISED.md").read_text())
+            self.assertIn(
+                "Exploratory reuse", (root / "reports/HOLDOUT-UNSUPERVISED.md").read_text()
+            )

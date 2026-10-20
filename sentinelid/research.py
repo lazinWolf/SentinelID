@@ -20,7 +20,6 @@ from sklearn.ensemble import (
     IsolationForest,
     RandomForestClassifier,
 )
-from sklearn.metrics import average_precision_score
 
 from .experiment_evaluation import evaluate
 from .experiment_features import TEMPORAL, corrected, measurements, vector
@@ -35,7 +34,7 @@ ARCHIVE_ROWS = "data/experiments/inputs/features.sqlite"
 ANSWERS = "data/experiments/inputs/answers.tar.bz2"
 HOLDOUT_START = "2010-12-01"
 HOLDOUT_END = "2011-05-17"
-FEATURE_SETS = ("v4", "c", "c_peer", "c_temporal", "c_temporal_peer")
+DEFAULT_CONFIG = "configs/research.json"
 
 
 def directory(root=ROOT):
@@ -84,7 +83,9 @@ def check_extraction(root=ROOT, start="2010-11-26"):
 
     for r in rebuilt:
         if comparable(archived[(r["day"], r["identity_id"])]) != comparable(r):
-            raise ValueError("Extraction differs from archive: " + r["day"] + "/" + r["identity_id"])
+            raise ValueError(
+                "Extraction differs from archive: " + r["day"] + "/" + r["identity_id"]
+            )
     return len(rebuilt)
 
 
@@ -262,14 +263,18 @@ class TailScorer:
         self.columns = np.sort(x, axis=0)
         return self
 
-    def score_samples(self, x):
+    def rarity(self, x):
+        """Per-input upper-tail rarity, -log P(reference >= value)."""
         n = len(self.columns)
-        rarity = np.column_stack(
+        return np.column_stack(
             [
                 -np.log((n - np.searchsorted(c, x[:, j], side="left") + 1) / (n + 1))
                 for j, c in enumerate(self.columns.T)
             ]
         )
+
+    def score_samples(self, x):
+        rarity = self.rarity(x)
         if self.channels:
             rarity = np.column_stack([rarity[:, group].max(axis=1) for group in self.channels])
         if self.top:
@@ -295,7 +300,16 @@ def weekends(days):
 
 
 # Data-movement channels; email content-volume inputs are excluded by channel, not by score.
-MOVEMENT = ("usb", "copy", "logon", "after_hours", "http", "timing_novel", "new_computer", "new_host")
+MOVEMENT = (
+    "usb",
+    "copy",
+    "logon",
+    "after_hours",
+    "http",
+    "timing_novel",
+    "new_computer",
+    "new_host",
+)
 
 
 def design(data, candidate):
@@ -461,9 +475,7 @@ def backtest(config_path, root=ROOT):
     data = Data(root)
     queue_config = json.loads((root / "config.json").read_text())["queue"]
     folds = config["folds"]
-    truths = {
-        f["start"]: truth(root / ANSWERS, day_after(f["start"], -7), f["end"]) for f in folds
-    }
+    truths = {f["start"]: truth(root / ANSWERS, day_after(f["start"], -7), f["end"]) for f in folds}
     for events in truths.values():
         if any(t["day"] >= DEVELOPMENT_END for t in events.values()):
             raise ValueError("Backtest folds must stay inside development")
@@ -496,8 +508,9 @@ def backtest(config_path, root=ROOT):
                     )
                     fitted, s = both[: len(train)], both[len(train) :]
                 else:
-                    fitted, s = score(model, x[train], weekend[train]), score(
-                        model, x[test], weekend[test]
+                    fitted, s = (
+                        score(model, x[train], weekend[train]),
+                        score(model, x[test], weekend[test]),
                     )
                 gate = float(np.quantile(fitted, config["gate_quantile"]))
                 settings, rank = queue_settings(candidate, queue_config)
@@ -635,8 +648,7 @@ def holdout(root=ROOT, seeds=(0, 1, 2, 3, 4), output="backtest"):
     selection = json.loads((directory(root) / output / "selection.json").read_text())
     config = json.loads((directory(root) / output / "results.json").read_text())["config"]
     previous = sorted(
-        str(p.relative_to(directory(root)))
-        for p in directory(root).glob("holdout*/result.json")
+        str(p.relative_to(directory(root))) for p in directory(root).glob("holdout*/result.json")
     )
     if fingerprint(config) != selection["config_sha256"]:
         raise ValueError("Backtest configuration changed after selection")
@@ -670,9 +682,7 @@ def holdout(root=ROOT, seeds=(0, 1, 2, 3, 4), output="backtest"):
         x, names = design(data, c)
         weekend = weekends(data.days)
         for seed in seeds:
-            model = fit(
-                c["model"], x[train], data.v["label"][train], seed, names, weekend[train]
-            )
+            model = fit(c["model"], x[train], data.v["label"][train], seed, names, weekend[train])
             if c.get("calibrate"):
                 seen = np.concatenate([train, test])
                 both = self_calibrate(
@@ -680,8 +690,9 @@ def holdout(root=ROOT, seeds=(0, 1, 2, 3, 4), output="backtest"):
                 )
                 fitted, held = both[: len(train)], both[len(train) :]
             else:
-                fitted, held = score(model, x[train], weekend[train]), score(
-                    model, x[test], weekend[test]
+                fitted, held = (
+                    score(model, x[train], weekend[train]),
+                    score(model, x[test], weekend[test]),
                 )
             frozen.append(
                 {
@@ -707,9 +718,7 @@ def holdout(root=ROOT, seeds=(0, 1, 2, 3, 4), output="backtest"):
         },
     )
     events = truth(root / ANSWERS, day_after(HOLDOUT_START, -7), HOLDOUT_END)
-    fresh = {
-        t["incident_id"] for t in events.values() if t["official_start"] >= HOLDOUT_START
-    }
+    fresh = {t["incident_id"] for t in events.values() if t["official_start"] >= HOLDOUT_START}
     runs = []
     for f in frozen:
         queue = replay(

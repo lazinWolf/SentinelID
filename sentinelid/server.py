@@ -31,7 +31,9 @@ class WorkloadService:
             self.input_names = bundle["names"]
         except (OSError, ValueError) as e:
             self.readiness_error = str(e)
-        self.presentation = RunPresentation(self.store, self.config, self.gate, digest(ROOT / "config.json"))
+        self.presentation = RunPresentation(
+            self.store, self.config, self.gate, digest(ROOT / "config.json")
+        )
 
     def summary(self):
         r = self.store.summary()

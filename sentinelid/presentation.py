@@ -37,9 +37,7 @@ def recorded_frames(scores, decisions, cases, config, gate):
     for index in range((end - start).days + config["queue"]["backlog_days"]):
         day = (start + timedelta(days=index)).date().isoformat()
         reasons = Counter(a["reason"] for a in offer_actions[day] + decision_actions[day])
-        suppressed = {
-            a["identity_id"] for a in offer_actions[day] if a["reason"] == "cooldown"
-        }
+        suppressed = {a["identity_id"] for a in offer_actions[day] if a["reason"] == "cooldown"}
         for offer in offers[day]:
             user = offer["identity_id"]
             if user in suppressed:
@@ -106,7 +104,9 @@ class RunPresentation:
             key = (run["id"], run["events_processed"])
             if key != self.key:
                 # The model and trace are trusted local artifacts, as in operational resume.
-                with sqlite3.connect("file:" + str(self.store.path.resolve()) + "?mode=ro", uri=True) as db:
+                with sqlite3.connect(
+                    "file:" + str(self.store.path.resolve()) + "?mode=ro", uri=True
+                ) as db:
                     checkpoint = db.execute(
                         "SELECT checkpoint FROM runs WHERE id=?", (run["id"],)
                     ).fetchone()[0]
@@ -121,10 +121,7 @@ class RunPresentation:
                     ):
                         c = json.loads(payload)
                         cases.append(
-                            {
-                                k: c[k]
-                                for k in ("case_id", "identity_id", "score", "decision_time")
-                            }
+                            {k: c[k] for k in ("case_id", "identity_id", "score", "decision_time")}
                             | {"evidence_total": len(c["evidence_pointers"])}
                         )
                 self.frames = recorded_frames(
@@ -144,7 +141,9 @@ class RunPresentation:
             if not 0 <= step < len(self.frames):
                 raise ValueError("Playback day is outside the recorded interval")
             frame = copy.deepcopy(self.frames[step])
-            with sqlite3.connect("file:" + str(self.store.path.resolve()) + "?mode=ro", uri=True) as db:
+            with sqlite3.connect(
+                "file:" + str(self.store.path.resolve()) + "?mode=ro", uri=True
+            ) as db:
                 frame["sample_measurements"] = [
                     json.loads(r[0])
                     for r in db.execute(
@@ -160,7 +159,10 @@ class RunPresentation:
                 "queue_policy": copy.deepcopy(self.config["queue"]),
                 "steps": len(self.frames),
                 "timeline": [
-                    {k: f[k] for k in ("day", "scored", "gate_passed", "cumulative_admissions", "drain")}
+                    {
+                        k: f[k]
+                        for k in ("day", "scored", "gate_passed", "cumulative_admissions", "drain")
+                    }
                     for f in self.frames
                 ],
                 "frame": frame,

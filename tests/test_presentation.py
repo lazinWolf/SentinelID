@@ -20,13 +20,13 @@ CFG = {"final": {"validation_start": "2010-11-01", "validation_end": "2010-11-06
 def trace():
     scores = [
         ("2010-11-01", u, s)
-        for u, s in [("a", .99), ("b", .97), ("c", .96), ("d", .7), ("e", .6), ("low", .3)]
+        for u, s in [("a", 0.99), ("b", 0.97), ("c", 0.96), ("d", 0.7), ("e", 0.6), ("low", 0.3)]
     ] + [
         ("2010-11-02", "a", 1.0),
-        ("2010-11-02", "b", .98),
-        ("2010-11-02", "f", .95),
-        ("2010-11-03", "c", .9),
-        ("2010-11-03", "g", .94),
+        ("2010-11-02", "b", 0.98),
+        ("2010-11-02", "f", 0.95),
+        ("2010-11-03", "c", 0.9),
+        ("2010-11-03", "g", 0.94),
     ]
     queue = WorkloadQueue(Q)
     states = []
@@ -34,13 +34,20 @@ def trace():
     for i in range(8):
         day = (start + timedelta(days=i)).date().isoformat()
         for d, user, score in scores:
-            if day != d or score < .5:
+            if day != d or score < 0.5:
                 continue
-            queue.offer({
-                "detector": "RF", "identity_id": user, "day": day, "score": score,
-                "available_time": (start + timedelta(days=i + 1)).isoformat(),
-                "evidence_ids": [d + user], "trigger_ids": [d + user], "qualifying_families": {},
-            })
+            queue.offer(
+                {
+                    "detector": "RF",
+                    "identity_id": user,
+                    "day": day,
+                    "score": score,
+                    "available_time": (start + timedelta(days=i + 1)).isoformat(),
+                    "evidence_ids": [d + user],
+                    "trigger_ids": [d + user],
+                    "qualifying_families": {},
+                }
+            )
         queue.decide((start + timedelta(days=i + 1, hours=8)).isoformat())
         states.append(copy.deepcopy(queue.pending))
     cases = [
@@ -54,7 +61,7 @@ def trace():
 class RecordedPlaybackTests(unittest.TestCase):
     def test_every_day_matches_maintained_queue_with_merge_cooldown_and_expiry(self):
         scores, queue, states, cases = trace()
-        frames = recorded_frames(scores, queue.decisions, cases, CFG, .5)
+        frames = recorded_frames(scores, queue.decisions, cases, CFG, 0.5)
         for f, expected in zip(frames, states, strict=True):
             actual = {c["identity_id"]: c for c in f["pending"]}
             self.assertEqual(actual.keys(), expected.keys())
@@ -74,15 +81,34 @@ class RecordedPlaybackTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             store = WorkloadStore(Path(td) / "operations.sqlite")
             with store.connection() as db:
-                db.execute("INSERT INTO runs VALUES(?,?,?,?,?,?,?)", ("saved", "completed", 100, 100, pickle.dumps({"queue": queue}), "same", "now"))
+                db.execute(
+                    "INSERT INTO runs VALUES(?,?,?,?,?,?,?)",
+                    ("saved", "completed", 100, 100, pickle.dumps({"queue": queue}), "same", "now"),
+                )
                 for day, user, score in scores:
                     payload = {"day": day, "identity_id": user, "score": score}
-                    db.execute("INSERT INTO observations VALUES(?,?,?,?,?)", ("saved", day, user, score, json.dumps(payload)))
+                    db.execute(
+                        "INSERT INTO observations VALUES(?,?,?,?,?)",
+                        ("saved", day, user, score, json.dumps(payload)),
+                    )
                 for c in queue.reviews:
-                    payload = {**c, "evidence_pointers": [{"event_id": e} for e in c["evidence_ids"]]}
-                    db.execute("INSERT INTO cases VALUES(?,?,?,?,?,?)", (c["case_id"], "saved", "RF", c["identity_id"], c["decision_time"], json.dumps(payload)))
+                    payload = {
+                        **c,
+                        "evidence_pointers": [{"event_id": e} for e in c["evidence_ids"]],
+                    }
+                    db.execute(
+                        "INSERT INTO cases VALUES(?,?,?,?,?,?)",
+                        (
+                            c["case_id"],
+                            "saved",
+                            "RF",
+                            c["identity_id"],
+                            c["decision_time"],
+                            json.dumps(payload),
+                        ),
+                    )
             before = hashlib.sha256(store.path.read_bytes()).hexdigest()
-            playback = RunPresentation(store, CFG, .5, "same")
+            playback = RunPresentation(store, CFG, 0.5, "same")
             first = playback.snapshot(0)
             self.assertFalse(first["writes_application_state"])
             first["frame"]["pending"].clear()
@@ -92,7 +118,7 @@ class RecordedPlaybackTests(unittest.TestCase):
                 playback.snapshot(8)
             self.assertEqual(before, hashlib.sha256(store.path.read_bytes()).hexdigest())
             with self.assertRaises(ValueError):
-                RunPresentation(store, CFG, .5, "changed").snapshot()
+                RunPresentation(store, CFG, 0.5, "changed").snapshot()
 
     def test_empty_run_does_not_fabricate_a_demo(self):
         with tempfile.TemporaryDirectory() as td:

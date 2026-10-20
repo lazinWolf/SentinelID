@@ -1,0 +1,14 @@
+{
+  "schema": "sentinelid-feedback-v1",
+  "note": "Label-free start (ecod_up_top5 prior); simulated analyst verdicts only for admitted cases; success = a learning variant beats the no-learning control on total timely incidents without lowering yield.",
+  "reference_start": "2010-06-08",
+  "start": "2010-08-01",
+  "end": "2010-12-01",
+  "gate_quantile": 0.99,
+  "label_rule": "positive if the admitted case's trigger records contain a labelled malicious record",
+  "variants": [
+    {"name": "none", "lambda": null},
+    {"name": "lambda_3", "lambda": 3.0},
+    {"name": "lambda_0.3", "lambda": 0.3}
+  ]
+}

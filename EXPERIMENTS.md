@@ -8,13 +8,13 @@ This milestone needs the **local research archive**, prepared original data and 
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -q
-.venv/bin/python -m sentinelid experiment --config experiments.json
+.venv/bin/python -m sentinelid experiment --config configs/experiments.json
 ```
 
 An interrupted experiment resumes with:
 
 ```bash
-.venv/bin/python -m sentinelid experiment --config experiments.json --resume
+.venv/bin/python -m sentinelid experiment --config configs/experiments.json --resume
 ```
 
 For a bounded checkpoint demonstration, append `--stop-after-days 1`, then resume without that limit. The limit counts additional scoring/decision days per configuration, including drain. Experiments replay cached eligible identity-days through the maintained queue; they do not re-ingest the full dataset for every combination. A shared source pass resolves evidence pointers and verifies representative original daily counts.

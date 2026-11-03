@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
+from .adaptive import VERDICTS
 from .ingestion import ROOT, evidence
 
 
@@ -122,6 +123,29 @@ class WorkloadStore:
             if row
             else {"version": 0, "status": "new", "disposition": "unreviewed", "note": ""}
         )
+
+    def adaptive_state(self, run_id):
+        """Gate, verdict count and largest weights on the latest adaptive scoring day."""
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT json_extract(payload,'$.adaptive') FROM observations WHERE run=? "
+                "ORDER BY day DESC LIMIT 1",
+                (run_id,),
+            ).fetchone()
+        return json.loads(row[0]) if row and row[0] else None
+
+    def verdicts(self, run_id):
+        """Latest analyst verdict per case as (+1/-1, [(day, identity), ...]), in admission order."""
+        result = []
+        with self.connection() as db:
+            for cid, payload in db.execute(
+                "SELECT id,payload FROM cases WHERE run=? ORDER BY decision,id", (run_id,)
+            ):
+                verdict = VERDICTS.get(self.latest_review(db, cid)["disposition"])
+                if verdict:
+                    case = json.loads(payload)
+                    result.append((verdict, [(d, case["identity_id"]) for d in case["days"]]))
+        return result
 
     def detail(self, cid, offset=0, limit=50):
         with self.connection() as db:

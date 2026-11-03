@@ -6,8 +6,8 @@ import numpy as np
 from test_pipeline import Q
 from test_research import FakeData
 
-from sentinelid.feedback import FeedbackModel, Oracle, components, online
-from sentinelid.research import TailScorer
+from sentinelid.adaptive import FeedbackModel, TailScorer, components
+from sentinelid.feedback import Oracle, online, paired
 
 
 class FeedbackTests(unittest.TestCase):
@@ -46,10 +46,29 @@ class FeedbackTests(unittest.TestCase):
         x = np.random.default_rng(3).exponential(size=(len(keys), 8))
         x[-6:, 0] += 50.0  # December rows are extreme, so they pass the gate
         oracle = Oracle({"file:a:2010-12-01": {}})
-        queue, _, margins, model, trace = online(
+        queue, _, margins, _, trace = online(
             data, x, "2010-12-01", "2010-12-03", "2010-11-20", 1.0, oracle, Q, 0.9
         )
         self.assertEqual(oracle.asked, [c["case_id"] for c in queue.reviews])
         self.assertTrue(np.isfinite(margins).all())
         # Each admitted case labels exactly its own scored identity-days, nothing else.
         self.assertEqual(trace[-1]["labels"], sum(len(c["days"]) for c in queue.reviews))
+
+    def test_imperfect_analyst_errors_are_seeded_and_counted(self):
+        events = {"e1": {}}
+        positive = {"case_id": "p", "trigger_ids": ["e1"]}
+        negative = {"case_id": "n", "trigger_ids": ["e2"]}
+        self.assertEqual(Oracle(events).verdict(positive), 1)
+        inverted = Oracle(events, flip=1.0)
+        self.assertEqual([inverted.verdict(positive), inverted.verdict(negative)], [-1, 1])
+        self.assertEqual(inverted.errors, 2)
+        missing = Oracle(events, miss=1.0)
+        self.assertEqual([missing.verdict(positive), missing.verdict(negative)], [-1, -1])
+        noisy = [Oracle(events, flip=0.5, seed=7).verdict(positive) for _ in range(2)]
+        self.assertEqual(noisy[0], noisy[1])
+
+    def test_paired_counts_discordant_incidents(self):
+        only_a, only_b, p = paired(["x", "y", "z"], ["z", "w"])
+        self.assertEqual((only_a, only_b), (2, 1))
+        self.assertAlmostEqual(p, 1.0)
+        self.assertEqual(paired([], []), (0, 0, 1.0))

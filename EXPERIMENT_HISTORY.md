@@ -41,7 +41,7 @@ RF with peers and native ordering was the only cell satisfying the declared **ob
 
 No independent validation period is available, so validated improvement remains unestablished and deployment remains unchanged. [Measured findings](reports/EXPERIMENT_FINDINGS.md) describe interactions, gate losses and detector/module disagreements. [Preservation evidence](reports/experiment-preservation.json) records unchanged operational artifacts, exact historical reproduction, native queue equivalence and fresh-process checkpoint verification.
 
-An earlier implementation attempt is retained at `data/experiments/394f4f5f36e57f7b32b7/`: its models were fitted, all variants checkpointed, and the first completed queue exposed a NumPy-to-JSON report error. That run has no complete comparison. The error was fixed and tested before the completed versioned run; no failed or partial result was inserted into the final matrix.
+An earlier implementation attempt (run `394f4f5f36e57f7b32b7`) fitted its models and checkpointed all variants, but its first completed queue exposed a NumPy-to-JSON report error. It produced no comparison. The error was fixed and tested before the completed versioned run; no failed or partial result was inserted into the final matrix. The failed run's 730 MB of local state was deleted in October 2026.
 
 ## Development backtest and sealed holdout (October 2026)
 
@@ -76,7 +76,8 @@ Active Anomaly Discovery-style learning from a label-free start ([report](report
 - **Development (August-November, one continuous queue).** With λ = 0.3, timely reach was 40/61 against 29/61 without learning. Current-positive yield rose from 0.28 to 0.69, with fewer investigations (102 vs 120). November matched the supervised fold result. The predeclared criterion (beat the no-learning control without lowering yield) was met.
 - **Learned weights.** Weight moved from the USB/copy-heavy prior to the HTTP-volume percentile, then new hosts/domains and message bytes.
 - **Exploratory holdout continuation.** This was the third use of the December-May holdout. Feedback reached 19/24 incidents and 16/18 fresh insiders with 82-83 investigations, against the deployed RF's 20/24 and 16/18 with 158.
-- **Limits.** The analyst is perfect and simulated. About half the daily budget went unused because the learned score concentrates on fewer identities. Ranking AP (0.19-0.26) stays below the RF's 0.82.
+- **Imperfect analysts (development, λ = 0.3, 10 seeds).** With 10% flipped verdicts the learner reached 38.2/61 on average (35-42) and beat the control in 10/10 seeds. With 20% flipped it averaged 34.7 (23-41), beating the control in 9/10. With 30% of true positives missed it averaged 32.8 (23-41), beating the control in 7/10 seeds, with yield falling to 0.52. The paired sign test for λ = 0.3 against the control gave p = 0.035; with two λ values tried, that is weak evidence. The matching holdout robustness run was interrupted and has not been rerun.
+- **Limits.** The analyst is perfect and simulated in the headline results. About half the daily budget went unused because the learned score concentrates on fewer identities. Ranking AP (0.19-0.26) stays below the RF's 0.82.
 
 ## Progression rules
 

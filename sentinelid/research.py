@@ -21,6 +21,7 @@ from sklearn.ensemble import (
     RandomForestClassifier,
 )
 
+from .adaptive import TailScorer, upward
 from .experiment_evaluation import evaluate
 from .experiment_features import TEMPORAL, corrected, measurements, vector
 from .experiment_io import digest, fingerprint, save_json
@@ -217,71 +218,6 @@ class Data:
 # Models, queue replay and evaluation.
 
 
-CHANNELS = (
-    "usb_active",
-    "usb",
-    "copy",
-    "after_hours",
-    "logon",
-    "external_email",
-    "message_bytes",
-    "attachments",
-    "http",
-    "new_recipient",
-    "new_domain",
-    "new_host",
-    "timing",
-    "new_computer",
-)
-
-
-def channel(name):
-    """Behavioral channel of an input; horizons and representations of one channel share it."""
-    base = name.split(":")[-1]
-    prefix = "peer_" if base.startswith("peer_") else ""
-    base = base.removeprefix("peer_")
-    return prefix + next((k for k in CHANNELS if base.startswith(k)), base)
-
-
-class TailScorer:
-    """Label-free ECOD-style score from the upper-tail rarity of each input.
-
-    `top` keeps only the strongest rarities. With `names`, each behavioral channel
-    contributes its single strongest rarity, so one behavior is not counted per horizon.
-    """
-
-    def __init__(self, top=None, names=None):
-        self.top = top
-        self.channels = None
-        if names is not None:
-            labels = [channel(n) for n in names]
-            self.channels = [
-                [j for j, c in enumerate(labels) if c == k] for k in dict.fromkeys(labels)
-            ]
-
-    def fit(self, x):
-        self.columns = np.sort(x, axis=0)
-        return self
-
-    def rarity(self, x):
-        """Per-input upper-tail rarity, -log P(reference >= value)."""
-        n = len(self.columns)
-        return np.column_stack(
-            [
-                -np.log((n - np.searchsorted(c, x[:, j], side="left") + 1) / (n + 1))
-                for j, c in enumerate(self.columns.T)
-            ]
-        )
-
-    def score_samples(self, x):
-        rarity = self.rarity(x)
-        if self.channels:
-            rarity = np.column_stack([rarity[:, group].max(axis=1) for group in self.channels])
-        if self.top:
-            rarity = np.sort(rarity, axis=1)[:, -self.top :]
-        return -rarity.sum(axis=1)
-
-
 class ByDayType:
     """Separate label-free references for weekend and weekday identity-days."""
 
@@ -316,10 +252,7 @@ def design(data, candidate):
     """Candidate inputs: optional upward-only percentiles and channel subset."""
     x, names = data.features(candidate["features"])
     if candidate.get("transform") == "up":
-        x = x.copy()
-        for j, name in enumerate(names):
-            if name.startswith("percentile:") or name.startswith("peer_") and "percentile" in name:
-                x[:, j] = np.maximum(0.0, x[:, j])
+        x = upward(x, names)
     if candidate.get("subset") == "movement":
         keep = [
             j

@@ -9,7 +9,13 @@ from urllib.parse import parse_qs, urlparse
 import joblib
 
 from .ingestion import ROOT, digest
-from .pipeline import WorkloadReplay, configuration, verify_model
+from .pipeline import (
+    ADAPTIVE_CONFIG,
+    ADAPTIVE_MARK,
+    WorkloadReplay,
+    configuration,
+    verify_model,
+)
 from .presentation import RunPresentation
 from .store import WorkloadStore
 
@@ -49,6 +55,13 @@ class WorkloadService:
         r["running"] = external or bool(self.thread and self.thread.is_alive())
         r["error"] = self.error
         r.update(json.loads((ROOT / "results.json").read_text()))
+        run = r["run"]
+        r["adaptive"] = None
+        if run and ADAPTIVE_MARK in run["experiment_identity"]:
+            r["adaptive"] = {
+                "settings": json.loads((ROOT / ADAPTIVE_CONFIG).read_text()),
+                "state": self.store.adaptive_state(run["id"]),
+            }
         r["pipeline"] = {
             "sources": self.config["sources"],
             "gate": self.gate,

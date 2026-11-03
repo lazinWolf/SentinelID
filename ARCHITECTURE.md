@@ -22,7 +22,7 @@ flowchart TD
     CASE["Immutable case<br/>current and retained evidence pointers"]
     DB[("SQLite application state<br/>runs, observations, cases and reviews")]
     UI["Local HTTP service and dashboard<br/>measurements, evidence and feedback"]
-    REVIEW["Versioned analyst review<br/>no automatic retraining"]
+    REVIEW["Versioned analyst review<br/>frozen RF: no retraining"]
 
     CSV --> READ
     LDAP --> READ
@@ -107,9 +107,32 @@ flowchart LR
     EVAL -. "saved outcome summary" .-> SAVED
 ```
 
-Validation truth has no edge into active features, scoring or admission. The dashboard reads saved benchmark results; it does not evaluate its current run. Analyst dispositions are separate records, not benchmark labels or a training signal.
+Validation truth has no edge into active features, scoring or admission. The dashboard reads saved benchmark results; it does not evaluate its current run. Analyst dispositions are separate records, never benchmark labels. They train nothing in a frozen-model run; in an optional adaptive run they are the only training signal (below).
 
 Final fitting used June 8–October 14. Label-free workload calibration used October 15–21. November 1–30 outcomes were evaluated after the declared freeze. Deployment uses the fitting-score gate selected during earlier development. The full protocol and previous rule/simulation implementations remain in the recovery archive.
+
+## Adaptive feedback mode
+
+```mermaid
+flowchart LR
+    ROWS["Eligible identity-days<br/>since June 8"]
+    VEC["Corrected 33 inputs<br/>upward-only percentiles"]
+    REF["Label-free tail reference<br/>refit each month"]
+    Z["Per-input rarities<br/>plus top-5 sum"]
+    W["Non-negative weights<br/>start one-hot on top-5 sum"]
+    SCORE["Score = w · rarities<br/>gate = 99th percentile of reference"]
+    QUEUE["Same queue, budget,<br/>cooldown and expiry"]
+    CASE["Admitted case"]
+    REVIEW["Analyst disposition<br/>confirmed/suspicious = +1, benign = -1"]
+    ROWS --> VEC --> REF --> Z --> SCORE --> QUEUE --> CASE --> REVIEW
+    VEC --> Z
+    W --> SCORE
+    REVIEW -. "refit weights before the next scored day" .-> W
+```
+
+`replay --new --adaptive` starts a separate run identified by `config.json` plus `configs/adaptive.json`. The detector starts label-free: its cold-start ranking equals the `ecod_up_top5` research detector. Before each scored day, the replay reads the latest disposition of every case in the run. It refits the weights by L2-anchored logistic loss over the scored identity-days of reviewed cases (`sentinelid/adaptive.py`). Unreviewed, `needs_context` and never-admitted identity-days give no label. With `--checkpoint-on-pending`, an adaptive run also stops right after each admission, so its review can shape the next day's scores.
+
+The research harness (`sentinelid/feedback.py`) uses the same `AdaptiveScorer`, and its results were unchanged by moving the scorer into the shared module. A full adaptive app replay has not yet been compared against the harness. Each observation stores its day gate, verdict count and largest weights for inspection.
 
 ## Checkpoint and recovery
 
@@ -149,13 +172,13 @@ The checkpoint contains the last `(timestamp, event_id)` key, cursor, unfinished
 
 Cases retain original event IDs, CSV paths, byte offsets, row numbers and contextual relationships rather than copying entire source content. Inspection seeks to an offset and verifies the event ID before displaying fields. Measurements include the exact transformed model vector, reference statistics and peer context.
 
-Evidence explains aggregate context; exact forest-to-event attribution is not computed. Cases remain immutable. Review writes append a new version and reject stale edit versions. Feedback does not change benchmark labels, scores or admission decisions. Existing pointers use absolute paths, which must be accounted for when moving a saved demo.
+Evidence explains aggregate context; exact model-to-event attribution is not computed. Cases remain immutable. Review writes append a new version and reject stale edit versions. Feedback never changes benchmark labels or already stored scores and decisions; only an adaptive run lets it change later scores. Existing pointers use absolute paths, which must be accounted for when moving a saved demo.
 
 ## Current boundaries
 
-The app is a local research demonstration with a fixed benchmark horizon. Live identity-provider connectors, production authentication, automated retraining and an outage feed are not implemented. Archived full evaluation and current operational replay are distinct execution paths.
+The app is a local research demonstration with a fixed benchmark horizon. Live identity-provider connectors, production authentication, retraining of the frozen model and an outage feed are not implemented. Archived full evaluation and current operational replay are distinct execution paths.
 
-The presentation path is separate from original-event processing: `GET /api/demo?step=N` reads a completed run's observations and trusted checkpoint decision trace. It requires matching configuration identity, displays recorded gate-passing offers and queue actions, and verifies its reconstructed final pending state/admission count against the checkpoint and cases. It does not generate new decisions or write to SQLite. Playback contains 30 scoring days and three drain steps; reset and display speed are browser controls. Case inspection uses the same stored measurements and verified original evidence as before. This is recorded-run playback, not a fault-injection simulator or a fresh benchmark evaluation.
+The presentation path is separate from original-event processing: `GET /api/demo?step=N` reads a completed run's observations and trusted checkpoint decision trace. It requires matching configuration identity (adaptive runs add their settings digest), displays recorded gate-passing offers against the frozen gate or an adaptive run's recorded day gates, and queue actions, and verifies its reconstructed final pending state/admission count against the checkpoint and cases. It does not generate new decisions or write to SQLite. Playback contains 30 scoring days and three drain steps; reset and display speed are browser controls. Case inspection uses the same stored measurements and verified original evidence as before. This is recorded-run playback, not a fault-injection simulator or a fresh benchmark evaluation.
 
 ## Reproducible acquisition
 

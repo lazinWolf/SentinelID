@@ -154,7 +154,7 @@ class ResearchTests(unittest.TestCase):
         np.testing.assert_array_equal(x[:, 0], [0.0, 0.2])
 
     def test_channel_tail_scorer_counts_each_behavior_once(self):
-        from sentinelid.research import TailScorer, channel
+        from sentinelid.adaptive import TailScorer, channel
 
         names = ["percentile:usb_change_1", "magnitude:usb_change_7", "percentile:http_change_1"]
         self.assertEqual([channel(n) for n in names], ["usb", "usb", "http"])

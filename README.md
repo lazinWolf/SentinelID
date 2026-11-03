@@ -4,9 +4,9 @@
 
 SentinelID is an academic and portfolio research prototype built around the CERT r4.2 insider-threat benchmark. It turns activity records into identity-level behavioral measurements, scores them with a saved machine-learning model, and admits a limited number of investigations with inspectable original evidence.
 
-The current application implements operational replay and investigation. Earlier rule-based detection, training, simulations and full evaluations are preserved in a local recovery archive. This is a midterm research prototype, not a production identity-security service.
+The current application implements operational replay and investigation, with an optional adaptive mode that learns from analyst reviews. A research layer adds a development backtest, a sealed December–May holdout and analyst-feedback experiments. Earlier rule-based detection, training, simulations and full evaluations are preserved in a local recovery archive. This is a research prototype, not a production identity-security service.
 
-[Architecture and pipeline diagrams](ARCHITECTURE.md) · [Midterm demonstration guide](DEMO.md) · [Optional experiments](EXPERIMENTS.md) · [Research progression](EXPERIMENT_HISTORY.md)
+[Architecture and pipeline diagrams](ARCHITECTURE.md) · [Optional experiments](EXPERIMENTS.md) · [Research progression](EXPERIMENT_HISTORY.md) · [Analyst-feedback report](reports/FEEDBACK.md)
 
 ## Capabilities
 
@@ -17,6 +17,7 @@ The current application implements operational replay and investigation. Earlier
 - Atomic SQLite checkpoints, immutable cases and versioned analyst reviews.
 - A local dashboard exposing transformed model inputs, historical references and original source evidence.
 - Read-only day playback with play/pause, scrubbing, pending candidates and recorded queue decisions; a presentation mode and tabbed investigation panels.
+- Optional adaptive replay: a label-free detector whose weights are refit from analyst dispositions on admitted cases.
 
 ```text
 CSV + LDAP → ordered records → daily history → features → model score
@@ -65,9 +66,10 @@ data/
     ├── recovery-v3/             # May 1–October 14, 2010
     │   ├── device.csv, email.csv, file.csv, http.csv, logon.csv
     │   └── LDAP/                # Monthly CSV snapshots, May–October
-    └── workload-v4/             # October 15–November 30, 2010
-        ├── device.csv, email.csv, file.csv, http.csv, logon.csv
-        └── LDAP/                # October and November snapshots
+    ├── workload-v4/             # October 15–November 30, 2010
+    │   ├── device.csv, email.csv, file.csv, http.csv, logon.csv
+    │   └── LDAP/                # October and November snapshots
+    └── holdout-v5/              # Optional (setup --holdout): December 1, 2010–May 16, 2011
 ```
 
 These artifacts and the recovery archive are excluded from Git. The setup command recreates the prepared data/model contract using tracked `setup-manifest.json`. A new replay creates a local database and evidence pointers for your checkout.
@@ -89,10 +91,11 @@ Prefix each command with `.venv/bin/python -m sentinelid`:
 | `replay --events 100000` | Resume the latest run for another bounded batch |
 | `replay` | Resume until completion |
 | `replay --checkpoint-on-pending` | Stop at a day boundary with candidates awaiting a decision |
+| `replay --new --adaptive` | Start a separate run scored by the adaptive feedback detector |
 
 `--new` retains earlier runs but makes the new run current in the dashboard. New runs build history from May; scoring starts in November, so initial progress does not immediately produce alerts. For a midterm, use the saved completed demonstration and **Day replay** for a quick walkthrough. Its Reset button changes only the playback position; it does not create a new run or change cases. Pause takes effect between committed batches for operational replay.
 
-The dashboard separates **Pipeline**, **Day replay**, **Investigations** and **Benchmark results**. Presentation mode enlarges text. Day replay reads stored scores and the committed decision trace, showing the same gate, merging, cooldown, expiry and admissions over November plus queue drain. It does not recompute predictions or evaluation, inject synthetic data or write application state. A fresh checkout needs a completed original-event replay before day playback is available. See [DEMO.md](DEMO.md) for a five-minute presentation.
+The dashboard separates **Pipeline**, **Day replay**, **Investigations** and **Benchmark results**. Presentation mode enlarges text. Day replay reads stored scores and the committed decision trace, showing the same gate, merging, cooldown, expiry and admissions over November plus queue drain. It does not recompute predictions or evaluation, inject synthetic data or write application state. A fresh checkout needs a completed original-event replay before day playback is available.
 
 One writer owns a database at a time. Resume requires the same configuration identity. Changing `config.json` requires a separate run; it does not validate a new experiment. These commands neither retrain models nor recompute benchmark outcomes.
 
@@ -124,6 +127,8 @@ An investigation is one queue admission, not measured analyst labor. Current-pos
 
 **Formal matched-cost improvement remains unestablished:** RF used one extra investigation and failed the predeclared non-greater-cost condition. RF uses fitting labels; IF does not. Two validation incidents recur in fitting. CERT is synthetic, so these results do not establish production or unseen-identity performance. Evidence presence does not identify exactly which event caused a forest prediction.
 
+**Later independent evidence.** On the sealed December 2010 – May 2011 holdout, evaluated once after every scorer was frozen, the same deployed model reached 20/24 incidents and 16/18 insiders who start after December 1, using 158 investigations at 0.43 current-positive yield ([holdout report](reports/HOLDOUT.md)).
+
 The saved replay processed **14,143,645 original records**, produced **18,772 scores** and admitted **31 cases**. Consolidation checks preserved all saved scores and queue decisions, matched 907 reconstructed real-day feature rows, and retained cases and reviews. These are historical regression measurements; unit tests alone do not reproduce the frozen evaluation.
 
 ## Project structure
@@ -150,9 +155,9 @@ Source, configuration, saved result summaries and documentation belong in Git. D
 
 ## Scope and next steps
 
-Implemented: original-record replay, causal features, fixed-model scoring, admission, durable state, evidence inspection and analyst feedback. Training, rule comparisons, simulations and full outcome evaluation are recoverable historical work.
+Implemented: original-record replay, causal features, fixed-model scoring, admission, durable state, evidence inspection, analyst reviews and an optional adaptive mode that learns from them. Earlier training, rule comparisons and simulations are recoverable historical work; the research layer below re-runs backtest, holdout and feedback evaluations.
 
-Next steps: a short checkpoint-based live demo, admission/evidence-refresh improvements, source-quality monitoring, efficient replay seeking and independent evaluation intervals/identities. The current server has no production authentication or live identity-provider integration. Feedback is stored; it does not automatically retrain the model.
+Next steps: a short checkpoint-based live demo, admission/evidence-refresh improvements, source-quality monitoring, efficient replay seeking and independent evaluation intervals/identities. The current server has no production authentication or live identity-provider integration. The frozen Random Forest never retrains; only an adaptive run uses reviews, and only to re-weight later scores.
 
 ## Recover historical work
 
@@ -176,6 +181,17 @@ The archive preserves earlier compatibility links, implementations and experimen
 The synthetic CERT Insider Threat Test Dataset is published by the CMU Software Engineering Institute. See the [official description](https://www.sei.cmu.edu/library/insider-threat-test-dataset/) and [dataset record](https://doi.org/10.1184/R1/12841247.v1). Local acquisition and mirror receipts are in `data/provenance.json`; benchmark terms and attribution are separate from this project's code.
 
 Dataset terms restrict redistribution. Download the originals from the documented source; do not commit them or assume this repository grants a dataset license. Copyright © 2011 ExactData, LLC. All Rights Reserved.
+
+## Adaptive feedback mode
+
+The frozen Random Forest needs labelled fitting data. Adaptive mode needs none at the start: it scores with the label-free rarity detector and re-weights it from your reviews.
+
+```bash
+.venv/bin/python -m sentinelid replay --new --adaptive --checkpoint-on-pending
+.venv/bin/python -m sentinelid serve     # review the new case, then rerun the replay command without --new/--adaptive
+```
+
+Set a case's disposition to **confirmed** or **suspicious** (+1) or **benign** (−1). Before each later scored day, the replay refits the detector weights on the scored identity-days of every reviewed case. `needs_context`, unreviewed and never-admitted identity-days give no label. With `--checkpoint-on-pending`, an adaptive run stops after each admission, so the review can shape the next day. Without it, the run still learns from whatever reviews exist as it goes. The dashboard shows the day gate, how many reviewed identity-days the detector has learned from, and its largest weights. Settings live in `configs/adaptive.json`; the run is kept separate from frozen-model runs.
 
 ## Optional corrected experiments
 

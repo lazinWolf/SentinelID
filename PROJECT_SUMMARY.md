@@ -2,7 +2,7 @@
 
 **Identity attack detection using behavioral analytics, causal event replay and evidence-based investigation**
 
-**Status as of October 6, 2026:** working academic and portfolio prototype, with a frozen model, a completed original-record replay, an investigation interface and preserved research experiments.
+**Status as of October 23, 2026:** working academic and portfolio prototype, with a frozen model, a completed original-record replay, an investigation interface and preserved research experiments. It adds a development backtest, a sealed holdout, analyst-feedback research and an optional adaptive replay mode (section 19).
 
 This document describes the project in one place: its purpose, development history, dataset, architecture, feature methodology, models, operational behavior, evaluation, verification, setup and remaining work. It distinguishes the maintained application from historical experiments stored in the local recovery archive.
 
@@ -33,6 +33,8 @@ The implemented benchmark scope is insider-threat behavior in CERT r4.2. It does
 | Investigation interface | Local dashboard with progress, cases, measurements, transformed inputs, original evidence and review history |
 | Operational validation | Completed replay of 14,143,645 records with 18,772 scores and 31 cases |
 | Research evaluation | Historical rules/ML comparisons, recovery experiments and final RF/IF workload comparison preserved |
+| Backtest and holdout | Rolling August–November development folds and a once-only sealed December–May holdout (`research` CLI) |
+| Analyst feedback | Label-free detector re-weighted by verdicts on admitted cases; research harness plus optional adaptive replay |
 | Delivery simulations | Earlier research implementations preserved; not a complete fault-injection suite for the current RF deployment |
 | Training and full evaluation | Historical implementations archived; not maintained CLI commands in the slim application |
 | Repository | Public GitHub source repository, pinned dependencies, ignored runtime artifacts and dataset-free CI |
@@ -359,7 +361,7 @@ These application counts match the retained operational run. Reviews are enginee
 
 ## 13. Verification and preservation
 
-The deployed-baseline suite had **22 tests**: 18 pipeline/store tests and four acquisition tests. It covers signed-percentile ties and direction, multi-day references, magnitude preservation, peer exclusion/support, missing historical coverage, serialization, fitting/inference schema compatibility, queue priority/reopening/expiry, checkpoint transactions, immutable cases and versioned feedback. Acquisition tests cover resume, ignored ranges, corruption, preservation of existing files and frozen CSV selection boundaries. The optional experiment milestone extends the suite to **33 tests**, adding corrected chronology, structured modules, held-out ranking, independent score persistence, isolation and transaction recovery.
+The deployed-baseline suite had **22 tests**: 18 pipeline/store tests and four acquisition tests. It covers signed-percentile ties and direction, multi-day references, magnitude preservation, peer exclusion/support, missing historical coverage, serialization, fitting/inference schema compatibility, queue priority/reopening/expiry, checkpoint transactions, immutable cases and versioned feedback. Acquisition tests cover resume, ignored ranges, corruption, preservation of existing files and frozen CSV selection boundaries. The optional experiment milestone extended the suite to **33 tests**, adding corrected chronology, structured modules, held-out ranking, independent score persistence, isolation and transaction recovery. The research and adaptive milestones bring it to **57 tests**. They add truth reconstruction, once-only holdout guards, tail scoring, analyst-feedback learning without label leakage, imperfect analysts, stored verdict mapping and adaptive playback gates.
 
 Historical verification also recorded:
 
@@ -372,7 +374,7 @@ Historical verification also recorded:
 
 The setup milestone verified fresh public downloads of the released model, both device/logon shards and required LDAP snapshots. All existing full-source checksums passed. It did **not** repeat the entire 7 GB download into a new checkout.
 
-GitHub Actions installs pinned dependencies, compiles Python and runs dataset-free tests on Python 3.14. Unit tests and CI do not reproduce the complete benchmark evaluation. Historical test counts refer to earlier code layouts and should not be confused with the maintained suite.
+GitHub Actions installs pinned dependencies, checks lint and formatting with ruff, compiles Python and runs dataset-free tests on Python 3.14. Unit tests and CI do not reproduce the complete benchmark evaluation. Historical test counts refer to earlier code layouts and should not be confused with the maintained suite.
 
 Sections 1–17 describe the deployed application and preserved research from source/configuration, saved artifacts, read-only database inspection and archived reports. Section 18 describes the separate corrected experiment milestone, which adds isolated fitting and retrospective comparisons.
 
@@ -387,6 +389,10 @@ Sections 1–17 describe the deployed application and preserved research from so
 | `sentinelid/pipeline.py` | Model transformation/prediction, queue policy, replay and checkpoint commits |
 | `sentinelid/store.py` | SQLite persistence, case inspection and review versions |
 | `sentinelid/server.py` | Local HTTP interface and replay worker |
+| `sentinelid/adaptive.py` | Label-free tail scoring and analyst-feedback weights, shared by research and adaptive replay |
+| `sentinelid/research.py`, `research_data.py` | Holdout extraction, development backtest and once-only holdout evaluation |
+| `sentinelid/feedback.py` | Simulated-analyst feedback experiments and their report |
+| `configs/`, `reports/` | Experiment protocols and generated reports |
 | `dashboard/` | Three maintained HTML/JS/CSS interface files |
 | `tests/` | Dataset-free pipeline and acquisition regressions |
 | `config.json` | Runtime horizon, feature/queue settings and model identity |
@@ -397,7 +403,7 @@ Sections 1–17 describe the deployed application and preserved research from so
 | `.github/workflows/ci.yml` | Automated dataset-free checks |
 | `data/` | Ignored originals, model, download scratch and application database |
 | `archive/` | Ignored historical code, reports and protected experiments |
-| `README.md`, `ARCHITECTURE.md`, `DEMO.md` | Setup, diagrams and presentation walkthrough |
+| `README.md`, `ARCHITECTURE.md` | Setup and diagrams; `DEMO.md` and presentation notes stay local |
 
 The tested stack is **Linux, Python 3.14.3, scikit-learn 1.9.1, NumPy 2.5.3, joblib 1.6.0, SQLite and browser JavaScript**. Python's standard library supplies CSV, networking, hashing, locking and HTTP serving. There is no required external database, container platform or JavaScript build toolchain.
 
@@ -466,14 +472,14 @@ The public setup reproduces the current runtime inputs; it does not reconstruct 
 
 ## 17. Limitations and sensible next work
 
-1. **Evaluation independence:** November outcomes are consumed; future selection requires new development and independent evaluation boundaries. Repeated actors/incidents and one synthetic dataset constrain generalization.
+1. **Evaluation independence:** November outcomes are consumed, and the December–May holdout has now been used once for selection and then reused for exploratory checks. Further selection needs new independent data. Repeated actors/incidents and one synthetic dataset constrain generalization.
 2. **Measured workload:** admissions approximate review cost. Analyst effort, time to resolution and operational false-alert burden remain unmeasured.
 3. **Live ingestion:** no identity-provider connector, continuous broker integration, robust late-event reconciliation or automated source-outage feed is implemented.
 4. **Simulation scope:** historical delivery simulations are preserved, but the current RF pipeline needs its own systematic duplicate/late/missing-source test program.
 5. **Demo accessibility:** full acquisition and warm-up are heavy. A compact real-data demonstration with adequate causal history would improve portfolio accessibility; it has been discussed but is not implemented.
 6. **Runtime efficiency:** replay restart scans earlier CSV data; download and replay progress reporting can be improved.
 7. **Evidence freshness:** pending evidence merges, but admitted cases remain immutable. New evidence and reopening policy deserve independent evaluation rather than an untested change to frozen behavior.
-8. **Model maintenance:** current scores are uncalibrated, there is no drift-monitoring/retraining service, and feedback does not trigger automatic learning.
+8. **Model maintenance:** current scores are uncalibrated and there is no drift-monitoring or retraining service for the frozen model. The optional adaptive mode learns from reviews, but its evidence comes from simulated analysts.
 9. **Security:** the interface is local and unauthenticated. Authentication, authorization, hardened deployment and audit operations are needed before shared production use.
 10. **Research portability:** training, rule comparisons and complete evaluation are archived locally. A clean public research workflow remains additional work.
 

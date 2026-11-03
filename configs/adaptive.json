@@ -1,0 +1,7 @@
+{
+  "schema": "sentinelid-adaptive-v1",
+  "note": "Optional replay mode: label-free ecod_up_top5 start, re-weighted by analyst dispositions (confirmed/suspicious = +1, benign = -1) on admitted cases. Settings match the selected research feedback variant.",
+  "reference_start": "2010-06-08",
+  "lambda": 0.3,
+  "gate_quantile": 0.99
+}

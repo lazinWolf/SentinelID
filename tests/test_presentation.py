@@ -76,6 +76,16 @@ class RecordedPlaybackTests(unittest.TestCase):
         self.assertTrue(frames[-1]["drain"])
         self.assertEqual(frames[-1]["scored"], 0)
 
+    def test_adaptive_day_gates_replace_the_frozen_gate(self):
+        scores, queue, _, cases = trace()
+        days = sorted({d for d, _, _ in scores})
+        frozen = recorded_frames(scores, queue.decisions, cases, CFG, 0.5)
+        daily = recorded_frames(scores, queue.decisions, cases, CFG, dict.fromkeys(days, 0.5))
+        self.assertEqual([f["gate_passed"] for f in frozen], [f["gate_passed"] for f in daily])
+        self.assertEqual(daily[0]["gate"], 0.5)
+        strict = recorded_frames(scores, queue.decisions, cases, CFG, dict.fromkeys(days, 99.0))
+        self.assertEqual(sum(f["gate_passed"] for f in strict), 0)
+
     def test_snapshot_is_read_only_deterministic_and_isolated_from_caller_mutation(self):
         scores, queue, _, _ = trace()
         with tempfile.TemporaryDirectory() as td:

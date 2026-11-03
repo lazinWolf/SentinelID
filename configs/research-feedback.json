@@ -10,5 +10,15 @@
     {"name": "none", "lambda": null},
     {"name": "lambda_3", "lambda": 3.0},
     {"name": "lambda_0.3", "lambda": 0.3}
-  ]
+  ],
+  "robustness": {
+    "note": "Imperfect analysts for the selected lambda; robust = mean over seeds beats the no-learning control on timely incidents and yield for every analyst.",
+    "lambda": 0.3,
+    "seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "analysts": [
+      {"name": "flip_10", "flip": 0.1},
+      {"name": "flip_20", "flip": 0.2},
+      {"name": "miss_30", "miss": 0.3}
+    ]
+  }
 }

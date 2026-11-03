@@ -8,9 +8,14 @@ import threading
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 
+from .pipeline import ADAPTIVE_MARK
+
 
 def recorded_frames(scores, decisions, cases, config, gate):
-    """Project the recorded trace onto days; never make new admission decisions."""
+    """Project the recorded trace onto days; never make new admission decisions.
+
+    `gate` is the frozen gate, or a day-to-gate mapping for adaptive runs.
+    """
     offers = defaultdict(list)
     counts = Counter()
     offer_actions = defaultdict(list)
@@ -18,7 +23,7 @@ def recorded_frames(scores, decisions, cases, config, gate):
     admitted = defaultdict(list)
     for day, identity, score in scores:
         counts[day] += 1
-        if score >= gate:
+        if score >= (gate[day] if isinstance(gate, dict) else gate):
             offers[day].append({"identity_id": identity, "score": score, "day": day})
     for action in decisions:
         if "decision_time" in action:
@@ -61,6 +66,7 @@ def recorded_frames(scores, decisions, cases, config, gate):
                     start + timedelta(days=index + 1, hours=config["queue"]["decision_hour"])
                 ).isoformat(),
                 "drain": day >= end.date().isoformat(),
+                "gate": gate.get(day) if isinstance(gate, dict) else gate,
                 "scored": counts[day],
                 "gate_passed": len(offers[day]),
                 "below_gate": counts[day] - len(offers[day]),
@@ -94,12 +100,14 @@ class RunPresentation:
     def snapshot(self, step=0):
         with self.lock:
             run = self.store.run()
-            if not run or run["status"] != "completed" or self.gate is None:
+            identity = run["experiment_identity"] if run else ""
+            adaptive = identity.startswith(self.config_identity + ADAPTIVE_MARK)
+            if not run or run["status"] != "completed" or (self.gate is None and not adaptive):
                 return {
                     "available": False,
                     "reason": "Complete the original-event replay once to enable recorded day playback.",
                 }
-            if run["experiment_identity"] != self.config_identity:
+            if identity != self.config_identity and not adaptive:
                 raise ValueError("Recorded run uses another configuration; restore it for playback")
             key = (run["id"], run["events_processed"])
             if key != self.key:
@@ -124,8 +132,17 @@ class RunPresentation:
                             {k: c[k] for k in ("case_id", "identity_id", "score", "decision_time")}
                             | {"evidence_total": len(c["evidence_pointers"])}
                         )
+                    gate = self.gate
+                    if adaptive:
+                        gate = dict(
+                            db.execute(
+                                "SELECT day,json_extract(payload,'$.adaptive.gate') "
+                                "FROM observations WHERE run=? GROUP BY day",
+                                (run["id"],),
+                            ).fetchall()
+                        )
                 self.frames = recorded_frames(
-                    scores, state["queue"].decisions, cases, self.config, self.gate
+                    scores, state["queue"].decisions, cases, self.config, gate
                 )
                 expected = state["queue"].pending
                 actual = {c["identity_id"]: c for c in self.frames[-1]["pending"]}
@@ -155,7 +172,7 @@ class RunPresentation:
                 "available": True,
                 "mode": "recorded-run playback",
                 "run_id": run["id"],
-                "gate": self.gate,
+                "gate": None if adaptive else self.gate,
                 "queue_policy": copy.deepcopy(self.config["queue"]),
                 "steps": len(self.frames),
                 "timeline": [

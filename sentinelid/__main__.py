@@ -42,6 +42,9 @@ def main():
     research.add_argument(
         "--holdout", action="store_true", help="feedback: exploratory holdout continuation"
     )
+    research.add_argument(
+        "--robustness", action="store_true", help="feedback: repeat with imperfect analysts"
+    )
     commands.add_parser("status", help="Show persisted progress and the selected model")
     verify = commands.add_parser(
         "verify", help="Verify the deployed model and required source files"
@@ -56,6 +59,11 @@ def main():
     replay.add_argument("--new", action="store_true", help="Preserve prior runs and start another")
     replay.add_argument("--events", type=int, help="Limit additional events for this invocation")
     replay.add_argument("--checkpoint-on-pending", action="store_true")
+    replay.add_argument(
+        "--adaptive",
+        action="store_true",
+        help="With --new: label-free detector re-weighted by analyst reviews (configs/adaptive.json)",
+    )
     args = parser.parse_args()
 
     try:
@@ -85,7 +93,10 @@ def main():
                 from . import feedback
 
                 config = args.config or feedback.DEFAULT_CONFIG
-                (feedback.holdout if args.holdout else feedback.run)(config)
+                if args.robustness:
+                    feedback.robustness(config, with_holdout=args.holdout)
+                else:
+                    (feedback.holdout if args.holdout else feedback.run)(config)
             elif args.stage == "backtest":
                 print(
                     json.dumps(
@@ -126,7 +137,9 @@ def main():
 
             if args.events is not None and args.events < 1:
                 raise ValueError("--events must be positive")
-            worker = WorkloadReplay(new=args.new)
+            if args.adaptive and not args.new:
+                raise ValueError("--adaptive starts a separate run; combine it with --new")
+            worker = WorkloadReplay(new=args.new, adaptive=args.adaptive)
             try:
                 remaining = args.events
                 while worker.status != "completed" and (remaining is None or remaining > 0):

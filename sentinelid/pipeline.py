@@ -1,4 +1,4 @@
-"""Frozen RF scoring, budgeted admissions and durable original-event replay."""
+"""Frozen RF or adaptive scoring, budgeted admissions and durable original-event replay."""
 
 import copy
 import fcntl
@@ -8,10 +8,12 @@ import math
 import pickle
 import uuid
 from datetime import datetime, timedelta
+from itertools import groupby
 
 import joblib
 import numpy as np
 
+from .adaptive import AdaptiveScorer, vector
 from .features import BASE, CHANGE, EXTRA, NOVEL, PEER, WorkloadStream, original_records
 from .ingestion import ROOT, digest
 from .store import WorkloadStore
@@ -191,8 +193,17 @@ class WorkloadQueue:
         return copy.deepcopy(self.__dict__)
 
 
+ADAPTIVE_CONFIG = "configs/adaptive.json"
+ADAPTIVE_MARK = "+adaptive:"
+
+
 def configuration():
     return json.loads((ROOT / "config.json").read_text())
+
+
+def adaptive_identity():
+    """Run identity of an adaptive run: the base configuration plus the adaptive settings."""
+    return digest(ROOT / "config.json") + ADAPTIVE_MARK + digest(ROOT / ADAPTIVE_CONFIG)
 
 
 def verify_model(originals=False):
@@ -225,7 +236,10 @@ def verify_model(originals=False):
 
 
 class WorkloadReplay:
-    def __init__(self, path=None, new=False):
+    # Frozen-model runs keep these unset; adaptive runs checkpoint them with the queue.
+    scorer = adaptive = daily = None
+
+    def __init__(self, path=None, new=False, adaptive=False):
         self.cfg = verify_model()
         self.selection = self.cfg["deployment"]
         self.key = self.selection["scorer"]
@@ -240,13 +254,25 @@ class WorkloadReplay:
         except BlockingIOError:
             self.lock.close()
             raise ValueError("Another pipeline writer owns this run") from None
-        self.identity = digest(ROOT / "config.json")
         old = self.store.run()
+        if old and not new:
+            adaptive = ADAPTIVE_MARK in old["experiment_identity"]
+        self.identity = adaptive_identity() if adaptive else digest(ROOT / "config.json")
+        self.adaptive = json.loads((ROOT / ADAPTIVE_CONFIG).read_text()) if adaptive else None
+        if adaptive:
+            self.key = "adaptive_feedback"
         self.checkpoint_requested = False
+        self.daily = {}
         if new or not old:
             self.run_id = uuid.uuid4().hex
             self.stream = WorkloadStream(self.cfg)
             self.queue = WorkloadQueue(self.cfg["queue"], self.selection["queue_variant"])
+            if adaptive:
+                self.scorer = AdaptiveScorer(
+                    self.adaptive["reference_start"],
+                    self.adaptive["lambda"],
+                    self.adaptive["gate_quantile"],
+                )
             self.cursor = 0
             self.last_key = None
             self.pointer_cache = {}
@@ -301,13 +327,25 @@ class WorkloadReplay:
                 }
                 for e in c["evidence_ids"]
             ],
-            "threshold": self.gate,
-            "feature_contract": "behavior-workload-v4",
-            "model_version": self.key + " / " + self.bundle["representation"],
+            "threshold": c.get("gate", self.gate),
+            "feature_contract": self.contract(),
+            "model_version": self.model_version(),
             "queue_version": self.selection["queue_variant"],
-            "calibration_version": self.selection["gate"],
-            "evidence_semantics": "Aggregate context; exact forest attribution not computed",
+            "calibration_version": (
+                "reference quantile %g" % self.adaptive["gate_quantile"]
+                if self.scorer
+                else self.selection["gate"]
+            ),
+            "evidence_semantics": "Aggregate context; exact model attribution not computed",
         }
+
+    def contract(self):
+        return "behavior-experiment-v1" if self.scorer else "behavior-workload-v4"
+
+    def model_version(self):
+        if self.scorer:
+            return self.key + " / corrected PM upward rarities"
+        return self.key + " / " + self.bundle["representation"]
 
     def decide(self):
         if not self.pending_decision:
@@ -319,6 +357,8 @@ class WorkloadReplay:
         return result
 
     def closed(self, rr):
+        if self.scorer:
+            return self.closed_adaptive(rr)
         output = []
         ready = [
             r
@@ -340,18 +380,7 @@ class WorkloadReplay:
             score = float(next(scored))
             output.append(
                 {
-                    "day": r["day"],
-                    "identity_id": r["identity_id"],
-                    "score": score,
-                    "features": r["features"]["28"],
-                    "percentiles": r["percentiles"],
-                    "peer_features": r["peer_features"],
-                    "reference": r["references"]["28"],
-                    "percentile_reference": r["percentile_reference"],
-                    "peer_reference": r["peer_reference"],
-                    "counts": r["counts"],
-                    "role": r["role"],
-                    "metadata_month": r["metadata_month"],
+                    **self.observation(r, score),
                     "transformed_inputs": dict(
                         zip(
                             self.bundle["names"],
@@ -364,21 +393,85 @@ class WorkloadReplay:
                 }
             )
             if score >= self.gate:
-                pointers = r["context_pointers"]
-                self.pointer_cache.update({p["event_id"]: p for p in pointers})
-                self.queue.offer(
-                    {
-                        "detector": self.key,
-                        "identity_id": r["identity_id"],
-                        "day": r["day"],
-                        "available_time": r["score_timestamp"],
-                        "score": score,
-                        "trigger_ids": r["event_ids"],
-                        "evidence_ids": sorted({p["event_id"] for p in pointers}),
-                        "qualifying_families": r["qualifying_families"],
-                    }
-                )
+                self.offer(r, score)
         return output
+
+    def offer(self, r, score, **extra):
+        pointers = r["context_pointers"]
+        self.pointer_cache.update({p["event_id"]: p for p in pointers})
+        self.queue.offer(
+            {
+                "detector": self.key,
+                "identity_id": r["identity_id"],
+                "day": r["day"],
+                "available_time": r["score_timestamp"],
+                "score": score,
+                "trigger_ids": r["event_ids"],
+                "evidence_ids": sorted({p["event_id"] for p in pointers}),
+                "qualifying_families": r["qualifying_families"],
+                **extra,
+            }
+        )
+
+    def closed_adaptive(self, rr):
+        """Score closed days with the adaptive detector, learning from saved analyst verdicts."""
+        output = []
+        final = self.cfg["final"]
+        for day, rows in groupby(sorted(rr, key=lambda r: r["day"]), key=lambda r: r["day"]):
+            rows = list(rows)
+            self.last_closed = datetime.fromisoformat(day).date()
+            cutoff = (self.last_closed - timedelta(days=6)).isoformat()
+            self.daily = {k: v for k, v in self.daily.items() if k[1] >= cutoff}
+            for r in rows:
+                self.daily[(r["identity_id"], day)] = {"counts": r["counts"]}
+            eligible = [
+                r for r in rows if r["common_eligible"] and day >= self.adaptive["reference_start"]
+            ]
+            if not eligible:
+                continue
+            vectors = [vector(r, self.daily) for r in eligible]
+            x, names = np.asarray([v for v, _ in vectors]), vectors[0][1]
+            if final["validation_start"] <= day < final["validation_end"]:
+                self.scorer.prepare(day, self.store.verdicts(self.run_id))
+                gate = self.scorer.gate
+                state = {
+                    "gate": gate,
+                    "verdict_labels": self.scorer.labels,
+                    "top_weights": self.scorer.weights(names, 5),
+                }
+                for r, inputs, score in zip(eligible, x, self.scorer.score(x), strict=True):
+                    score = float(score)
+                    output.append(
+                        {
+                            **self.observation(r, score),
+                            "transformed_inputs": dict(zip(names, inputs.tolist(), strict=True)),
+                            "contract": self.contract(),
+                            "model_version": self.model_version(),
+                            "adaptive": state,
+                        }
+                    )
+                    if score >= gate:
+                        self.offer(r, score, gate=gate)
+            for r, inputs in zip(eligible, x, strict=True):
+                self.scorer.observe(day, r["identity_id"], inputs)
+        return output
+
+    @staticmethod
+    def observation(r, score):
+        return {
+            "day": r["day"],
+            "identity_id": r["identity_id"],
+            "score": score,
+            "features": r["features"]["28"],
+            "percentiles": r["percentiles"],
+            "peer_features": r["peer_features"],
+            "reference": r["references"]["28"],
+            "percentile_reference": r["percentile_reference"],
+            "peer_reference": r["peer_reference"],
+            "counts": r["counts"],
+            "role": r["role"],
+            "metadata_month": r["metadata_month"],
+        }
 
     def commit(self, rows, cases):
         state = {
@@ -391,6 +484,8 @@ class WorkloadReplay:
                 "pointer_cache",
                 "pending_decision",
                 "last_closed",
+                "scorer",
+                "daily",
             ]
         }
         with self.store.connection() as db:
@@ -429,6 +524,11 @@ class WorkloadReplay:
         self.checkpoint_requested = False
         try:
             cases.extend(self.decide())
+            if self.scorer and checkpoint_on_pending and cases:
+                # Stop after admission so the analyst can review before the next scored day.
+                self.checkpoint_requested = True
+                self.commit([], cases)
+                return self.store.summary()
             for _ in range(count):
                 try:
                     e = next(self.iterator)

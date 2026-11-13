@@ -11,6 +11,9 @@ dependencies = [
 ]
 license = "MIT"
 
+[project.optional-dependencies]
+figures = ["matplotlib>=3.9"]
+
 [project.scripts]
 sentinelid = "sentinelid.__main__:main"
 

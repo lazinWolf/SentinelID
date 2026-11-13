@@ -47,6 +47,9 @@ def main():
     research.add_argument(
         "--robustness", action="store_true", help="feedback: repeat with imperfect analysts"
     )
+    research.add_argument(
+        "--app", action="store_true", help="feedback: compare a real adaptive replay with it"
+    )
     commands.add_parser("status", help="Show persisted progress and the selected model")
     verify = commands.add_parser(
         "verify", help="Verify the deployed model and required source files"
@@ -103,7 +106,9 @@ def main():
                 from . import feedback
 
                 config = args.config or feedback.DEFAULT_CONFIG
-                if args.robustness:
+                if args.app:
+                    print(json.dumps(feedback.app_comparison(config)["admissions_equal"]))
+                elif args.robustness:
                     feedback.robustness(config, with_holdout=args.holdout)
                 else:
                     (feedback.holdout if args.holdout else feedback.run)(config)

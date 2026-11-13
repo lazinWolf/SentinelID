@@ -55,6 +55,7 @@ class WorkloadService:
         r["running"] = external or bool(self.thread and self.thread.is_alive())
         r["error"] = self.error
         r.update(json.loads((ROOT / "results.json").read_text()))
+        r["demo"] = self.config.get("demo")
         run = r["run"]
         r["adaptive"] = None
         if run and ADAPTIVE_MARK in run["experiment_identity"]:

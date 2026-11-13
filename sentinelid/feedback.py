@@ -560,3 +560,130 @@ def robustness_holdout_section(saved, rf):
             f"{np.mean([r['current_positive'] / r['admissions'] for r in runs]):.2f} |"
         )
     return lines
+
+
+# ---------------------------------------------------------------------------
+# The adaptive app against this harness.
+
+APP_START, APP_END = "2010-11-01", "2010-12-01"
+
+
+def app_comparison(config_path=DEFAULT_CONFIG, root=ROOT):
+    """Run the harness and a real adaptive app replay over November from a cold start.
+
+    Both use the same simulated analyst; the app receives its verdicts as saved reviews.
+    The app scores only November, so the harness here also starts learning on November 1.
+    """
+    import sqlite3
+
+    from .pipeline import WorkloadReplay
+    from .store import WorkloadStore
+
+    settings = json.loads((root / "configs/adaptive.json").read_text())
+    config, data, x, _, queue_config = setting(config_path, root)
+    events = truth(root / ANSWERS, day_after(APP_START, -7), APP_END)
+    queue, rows, margins, _, _ = online(
+        data,
+        x,
+        APP_START,
+        APP_END,
+        settings["reference_start"],
+        settings["lambda"],
+        Oracle(events),
+        queue_config,
+        settings["gate_quantile"],
+    )
+    harness = {
+        "admissions": [[c["identity_id"], c["decision_time"]] for c in queue.reviews],
+        "margins": {
+            f"{data.days[i]}|{data.v['identity'][i]}": float(m)
+            for i, m in zip(rows, margins, strict=True)
+        },
+    }
+    out = directory(root) / "adaptive-app"
+    out.mkdir(exist_ok=True)
+    path = out / "operations.sqlite"
+    for p in (path, path.with_suffix(".lock")):
+        p.unlink(missing_ok=True)
+    store, analyst, reviewed = WorkloadStore(path), Oracle(events), set()
+    worker = WorkloadReplay(path, new=True, adaptive=True)
+    try:
+        while worker.status != "completed":
+            worker.step(200_000, checkpoint_on_pending=True)
+            with sqlite3.connect(path) as db:
+                new = db.execute(
+                    "SELECT id,payload FROM cases WHERE run=? ORDER BY decision,id",
+                    (worker.run_id,),
+                ).fetchall()
+            for cid, payload in new:
+                if cid not in reviewed:
+                    given = analyst.verdict(json.loads(payload))
+                    disposition = "confirmed" if given > 0 else "benign"
+                    store.review(cid, 0, "resolved", disposition, actor="simulated analyst")
+                    reviewed.add(cid)
+    finally:
+        worker.close()
+    with sqlite3.connect(path) as db:
+        cases = [
+            json.loads(p) for (p,) in db.execute("SELECT payload FROM cases ORDER BY decision")
+        ]
+        observed = {
+            f"{d}|{u}": json.loads(p)["score"] - json.loads(p)["adaptive"]["gate"]
+            for d, u, p in db.execute("SELECT day,identity,payload FROM observations")
+        }
+    app = {"admissions": [[c["identity_id"], c["decision_time"]] for c in cases]}
+    shared = observed.keys() & harness["margins"].keys()
+    differences = [abs(observed[k] - harness["margins"][k]) for k in shared]
+    result = {
+        "period": [APP_START, APP_END],
+        "settings": settings,
+        "harness": {"admissions": harness["admissions"]},
+        "app": app,
+        "admissions_equal": app["admissions"] == harness["admissions"],
+        "scored_rows": {
+            "app": len(observed),
+            "harness": len(harness["margins"]),
+            "shared": len(shared),
+        },
+        "largest_margin_difference": max(differences) if differences else None,
+    }
+    save_json(out / "comparison.json", result)
+    write_app_report(root, result)
+    return result
+
+
+def write_app_report(root, result):
+    harness, app = result["harness"]["admissions"], result["app"]["admissions"]
+    lines = [
+        "# Adaptive app against the research harness",
+        "",
+        f"November 2010 from a cold start (λ = {result['settings']['lambda']}). The harness "
+        "scores cached research vectors; the app recomputes every feature from the 14.1M "
+        "original records during replay. A simulated perfect analyst reviews each admitted case: "
+        "in the harness the verdict goes straight to the learner, in the app it is saved as a "
+        "versioned review that the replay reads before the next scored day.",
+        "",
+        "| | Harness | App |",
+        "| --- | ---: | ---: |",
+        f"| Investigations | {len(harness)} | {len(app)} |",
+        f"| Scored identity-days | {result['scored_rows']['harness']} | "
+        f"{result['scored_rows']['app']} |",
+        "",
+        f"- Identical admissions (identity and decision time, in order): "
+        f"**{'yes' if result['admissions_equal'] else 'no'}**.",
+        f"- Identity-days scored by both: {result['scored_rows']['shared']}; largest difference "
+        f"in score minus day gate: {result['largest_margin_difference']:.3g}.",
+        "",
+    ]
+    if not result["admissions_equal"]:
+        first = next(
+            (k for k, (a, b) in enumerate(zip(harness, app, strict=False)) if a != b),
+            min(len(harness), len(app)),
+        )
+        lines += [
+            f"The sequences first differ at investigation {first + 1}: harness "
+            f"{harness[first] if first < len(harness) else '-'}, app "
+            f"{app[first] if first < len(app) else '-'}.",
+            "",
+        ]
+    (root / "reports/ADAPTIVE_APP_CHECK.md").write_text("\n".join(lines))

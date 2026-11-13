@@ -138,7 +138,7 @@ flowchart LR
 
 `replay --new --adaptive` starts a separate run identified by `config.json` plus `configs/adaptive.json`. The detector starts label-free: its cold-start ranking equals the `ecod_up_top5` research detector. Before each scored day, the replay reads the latest disposition of every case in the run. It refits the weights by L2-anchored logistic loss over the scored identity-days of reviewed cases (`sentinelid/adaptive.py`). Unreviewed, `needs_context` and never-admitted identity-days give no label. With `--checkpoint-on-pending`, an adaptive run also stops right after each admission, so its review can shape the next day's scores.
 
-The research harness (`sentinelid/feedback.py`) uses the same `AdaptiveScorer`, and its results were unchanged by moving the scorer into the shared module. A full adaptive app replay has not yet been compared against the harness. Each observation stores its day gate, verdict count and largest weights for inspection.
+The research harness (`sentinelid/feedback.py`) uses the same `AdaptiveScorer`, and its results were unchanged by moving the scorer into the shared module. A full adaptive app replay over November (`research feedback --app`, [report](reports/ADAPTIVE_APP_CHECK.md)) admitted the same 23 investigations in the same order as the harness, with identical inputs on every scored day. Scores differ slightly because 820 of 96,123 June–October reference rows differ in novelty counts between the live builder and the archived research cache (one extra new host, recipient or domain on Mondays). Each observation stores its day gate, verdict count and largest weights for inspection.
 
 ## Checkpoint and recovery
 

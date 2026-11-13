@@ -1,12 +1,42 @@
 # SentinelID
 
-**Identity attack detection using behavioral analytics, causal event replay and evidence-based investigation.**
+**Detecting identity misuse from behavior, one investigation a day.**
 
-SentinelID is an academic and portfolio research prototype built around the CERT r4.2 insider-threat benchmark. It turns activity records into identity-level behavioral measurements, scores them with a saved machine-learning model, and admits a limited number of investigations with inspectable original evidence.
+Attacks that use valid credentials, such as an insider stealing data before leaving or an administrator logging on as their supervisor, break no access rule. SentinelID profiles each identity against its own history, scores every identity-day with a Random Forest and gives an analyst **at most one investigation per morning**, with the original log lines as evidence. It is an academic and portfolio research prototype on the synthetic CERT r4.2 insider-threat benchmark, not a production security service.
 
-The current application implements operational replay and investigation, with an optional adaptive mode that learns from analyst reviews. A research layer adds a development backtest, a sealed December–May holdout and analyst-feedback experiments. Earlier rule-based detection, training, simulations and full evaluations are preserved in a local recovery archive. This is a research prototype, not a production identity-security service.
+**[Read the report](REPORT.md)** · [Architecture](ARCHITECTURE.md) · [Research history](EXPERIMENT_HISTORY.md) · [Identity coverage](reports/IDENTITY_COVERAGE.md)
 
-[Architecture and pipeline diagrams](ARCHITECTURE.md) · [Optional experiments](EXPERIMENTS.md) · [Research progression](EXPERIMENT_HISTORY.md) · [Analyst-feedback report](reports/FEEDBACK.md)
+```bash
+python -m sentinelid demo     # one minute, invented organisation, no dataset download
+```
+
+![SentinelID dashboard on the invented demo organisation](docs/figures/dashboard-overview.png)
+
+## Results at a glance
+
+| Question | Result | Source |
+| --- | --- | --- |
+| Does it reach incidents in time? (frozen November evaluation) | 9 of 11 incidents within 72 hours with 31 investigations; Isolation Forest 2 of 11 | [results.json](results.json) |
+| Does it hold on unseen data? (sealed Dec 2010 – May 2011 holdout) | 20 of 24 incidents and **16 of 18 new insiders**, 158 investigations | [holdout](reports/HOLDOUT.md) |
+| Can it start without labels? | Label-free 28/61 development incidents; with analyst feedback on its own cases, **40/61** (supervised 45.3) | [feedback](reports/FEEDBACK.md) |
+| Does it catch account takeover? | Only through the attacker's own preparation. **The hijacked account itself is never flagged (0 of 6 days)** | [coverage](reports/IDENTITY_COVERAGE.md) |
+| Do takeover-aware features fix that? | No. A +0.7 development gain reversed on the holdout; the signal is too common to win a one-per-day queue | [ledger](reports/BACKTEST-LEDGER.md) |
+
+![Timely incident reach by detector](docs/figures/detector-reach.png)
+
+## Threat model in one table
+
+| CERT scenario | What the attacker does | ATT&CK | Seen by |
+| --- | --- | --- | --- |
+| 1. Data theft | After-hours logons, first USB use, upload to wikileaks.org | T1078, T1052.001, T1567 | after-hours, USB/copy and web changes |
+| 2. Job hunt, then theft | Job-site browsing, then heavy USB copying | T1005, T1052.001 | web and USB/copy changes |
+| 3. Account takeover | Keylogger download, carried by USB to the supervisor's computer, then logs on **as the supervisor** and mass-emails | T1105, T1570, T1056.001, T1078 | attacker's account: yes; **victim's account: no** |
+
+CERT has no failed logons, source addresses, locations or MFA events, so credential attacks such as password spraying or impossible travel are outside what this project can test. Details are in [section 3 of the report](REPORT.md#3-threat-model).
+
+![Investigation view: an admitted case with its original source records (demo data)](docs/figures/dashboard-case.png)
+
+*Screenshots show the invented demo organisation, not CERT data.*
 
 ## Capabilities
 
@@ -149,7 +179,10 @@ sentinelid/                # Ingestion, features, scoring/queue/replay, store, s
 dashboard/                # HTML, JavaScript and CSS investigation interface
 tests/                    # Unit regressions plus one end-to-end run on the invented demo data
 configs/                  # Experiment, backtest and feedback protocols
-reports/                  # Generated experiment, backtest, holdout and feedback reports
+reports/                  # Generated experiment, backtest, holdout, feedback and coverage reports
+REPORT.md                 # Final project report
+docs/figures/             # Report figures and dashboard screenshots
+scripts/figures.py        # Regenerates the report figures from saved results
 setup-manifest.json       # Pinned URLs, byte ranges, row counts and checksums
 .github/workflows/ci.yml  # Lint, formatting and dataset-free unit tests
 config.json               # Runtime settings and selected model identity
@@ -166,11 +199,17 @@ archive/                  # Local only: recoverable historical work
 
 Source, configuration, saved result summaries and documentation belong in Git. Dataset files, databases, archives, credentials and caches remain local; the pinned model is distributed separately as a GitHub Release asset. The CI workflow runs tests without downloading benchmark data; hosted execution is separate from local verification.
 
-## Scope and next steps
+## Known limitations
 
-Implemented: original-record replay, causal features, fixed-model scoring, admission, durable state, evidence inspection, analyst reviews and an optional adaptive mode that learns from them. Earlier training, rule comparisons and simulations are recoverable historical work; the research layer below re-runs backtest, holdout and feedback evaluations.
+- **Synthetic data.** CERT r4.2 is one simulated organisation with scripted insiders; results are benchmark results.
+- **Simulated analyst.** Feedback results use answer-key verdicts (with error rates in the robustness study); analyst effort is not measured, and an investigation stands in for it.
+- **Reused holdout.** The December–May holdout was first used for the supervised evaluation and then four more times for labelled exploratory comparisons.
+- **Small counts.** 11 November incidents, 61 incident-folds in development, 24 holdout incidents.
+- **One identity at a time.** Per-identity profiling misses the hijacked account in a takeover; see [identity coverage](reports/IDENTITY_COVERAGE.md).
+- **No credential-attack telemetry.** No failed logons, addresses, locations or MFA.
+- **Local prototype.** The dashboard has no authentication. The frozen model never retrains; only an adaptive run uses reviews, and only to re-weight later scores.
 
-Next steps: a short checkpoint-based live demo, admission/evidence-refresh improvements, source-quality monitoring, efficient replay seeking and independent evaluation intervals/identities. The current server has no production authentication or live identity-provider integration. The frozen Random Forest never retrains; only an adaptive run uses reviews, and only to re-weight later scores.
+Future work is listed in [section 8 of the report](REPORT.md#8-limitations-and-future-work).
 
 ## Recover historical work
 
@@ -231,6 +270,7 @@ This runs separate eight-configuration RF/IF matrices for temporal, peer and rel
 .venv/bin/python -m sentinelid research feedback   # label-free start with simulated analyst verdicts
 .venv/bin/python -m sentinelid research ledger     # one raw pass: population-context ledger features
 .venv/bin/python -m sentinelid research coverage   # deployed model's results by scenario and account
+.venv/bin/python -m sentinelid research feedback --app   # real adaptive replay vs the research harness (~30 min)
 ```
 
 Protocols live in `configs/`; pass `--config configs/research-unsupervised.json` for the label-free study, and `research feedback --holdout` for the exploratory feedback continuation.

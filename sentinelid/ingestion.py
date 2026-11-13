@@ -4,12 +4,16 @@ import csv
 import hashlib
 import heapq
 import itertools
+import os
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
-ROOT = Path(__file__).resolve().parents[1]
+# APP is where the code and dashboard live; ROOT is the project root whose configuration,
+# model and data are used. SENTINELID_ROOT points ROOT elsewhere, as the demo does.
+APP = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ.get("SENTINELID_ROOT") or APP).resolve()
 
 
 def parse_date(value):

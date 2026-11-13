@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 from test_pipeline import Q
 
-from sentinelid.research import holdout, replay, summarize
+from sentinelid.research import coverage, holdout, replay, summarize
 from sentinelid.research_data import truth
 
 
@@ -66,6 +66,38 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(event["observed_account"], "CCC0003")
         self.assertEqual(event["actor"], "AAA0001")
         self.assertEqual(event["official_start"], "2010-12-02T09:00:00")
+
+    def test_coverage_splits_takeover_records_by_account(self):
+        keys = [("2010-11-02", "ATK"), ("2010-11-03", "VIC"), ("2010-11-02", "OTH")]
+        data = FakeData(keys)
+
+        def event(day, account):
+            return {
+                "day": day,
+                "timestamp": day + "T10:00:00",
+                "observed_account": account,
+                "actor": "ATK",
+                "incident_id": "i3",
+                "scenario": "3",
+            }
+
+        events = {
+            "file:ATK:2010-11-02": event("2010-11-02", "ATK"),
+            "file:VIC:2010-11-03": event("2010-11-03", "VIC"),
+        }
+        scores = np.asarray([0.9, 0.2, 0.1])
+        queue = replay(
+            data, np.arange(3), scores, 0.5, "2010-11-01", "2010-11-05", "max_cooldown", Q
+        )
+        result = coverage(
+            data, np.arange(3), scores, 0.5, queue, events, "2010-11-01", "2010-11-05"
+        )["3"]
+        self.assertEqual(result["own"]["gate_days"], 1)
+        self.assertEqual(result["own"]["timely_incidents"], 1)
+        self.assertEqual(result["hijacked"]["identity_days"], 1)
+        self.assertEqual(result["hijacked"]["gate_days"], 0)
+        self.assertEqual(result["hijacked"]["timely_incidents"], 0)
+        self.assertEqual(result["hijacked"]["first_record_to_admission_hours"], [])
 
     def test_replay_admits_budget_per_day_and_drains(self):
         keys = [("2010-12-01", "a"), ("2010-12-01", "b"), ("2010-12-02", "c")]

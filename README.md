@@ -36,7 +36,17 @@ python3.14 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -q
 ```
 
-If the project environment already exists, use it directly. Unit tests do not require the large dataset, model or recovery archive.
+If the project environment already exists, use it directly. Tests do not require the large dataset, model or recovery archive.
+
+### Try it in one minute, without CERT
+
+```bash
+.venv/bin/python -m sentinelid demo
+```
+
+This generates an **invented** 24-person organisation in the CERT file layout (May–November 2010, about 47,000 events, with planted data-theft, job-hunting and account-takeover incidents). It trains a small demo model on June–October and replays November through the real ingestion, feature, queue and storage code, then serves the dashboard at **http://127.0.0.1:8767/**. It takes about 30 seconds. The demo model and its numbers are not the evaluated result; they only show the system working. Add `--fresh` to regenerate. The files live in the gitignored `demo/` directory, and `SENTINELID_ROOT` points every command at it.
+
+### Full CERT setup
 
 Review the [dataset terms](https://huggingface.co/datasets/jinmang2/cert_insider_threat/resolve/010e4562bb025ea15ea73c7a1f9231037b237ad2/r4.2/license.txt) before downloading. If you agree:
 
@@ -82,6 +92,7 @@ Prefix each command with `.venv/bin/python -m sentinelid`:
 
 | Command | Purpose |
 | --- | --- |
+| `demo` | Invented organisation: generate, fit a demo model, replay and serve (no CERT needed) |
 | `setup --accept-data-license` | Download, prepare and verify the exact data shards and model |
 | `status` | Show the latest persisted run, selected model and case count |
 | `verify` | Check the model checksum and required source-file presence |
@@ -136,7 +147,7 @@ The saved replay processed **14,143,645 original records**, produced **18,772 sc
 ```text
 sentinelid/                # Ingestion, features, scoring/queue/replay, store, server, research and CLI
 dashboard/                # HTML, JavaScript and CSS investigation interface
-tests/                    # Pipeline, acquisition, experiment and research regressions
+tests/                    # Unit regressions plus one end-to-end run on the invented demo data
 configs/                  # Experiment, backtest and feedback protocols
 reports/                  # Generated experiment, backtest, holdout and feedback reports
 setup-manifest.json       # Pinned URLs, byte ranges, row counts and checksums
@@ -145,7 +156,9 @@ config.json               # Runtime settings and selected model identity
 results.json              # Saved comparison and measured verdict
 ARCHITECTURE.md            # Pipeline, research boundary and recovery diagrams
 requirements.txt          # Exact dependency versions for the saved model
-pyproject.toml            # Project metadata and lint configuration
+pyproject.toml            # Project metadata, `sentinelid` entry point and lint configuration
+LICENSE                   # MIT for the code; the CERT data keeps its own terms
+demo/                     # Local only: generated demo root (invented data)
 data/                     # Local only: originals, model, application and research state
 DEMO.md, present*.md      # Local only: presentation notes
 archive/                  # Local only: recoverable historical work
@@ -216,10 +229,14 @@ This runs separate eight-configuration RF/IF matrices for temporal, peer and rel
 .venv/bin/python -m sentinelid research backtest   # rolling June-November folds; predeclared selection
 .venv/bin/python -m sentinelid research holdout    # once only: freeze scorers, then read holdout labels
 .venv/bin/python -m sentinelid research feedback   # label-free start with simulated analyst verdicts
+.venv/bin/python -m sentinelid research ledger     # one raw pass: population-context ledger features
+.venv/bin/python -m sentinelid research coverage   # deployed model's results by scenario and account
 ```
 
 Protocols live in `configs/`; pass `--config configs/research-unsupervised.json` for the label-free study, and `research feedback --holdout` for the exploratory feedback continuation.
 
 The deployed model reached 16 of 18 insiders who start after December 1 ([holdout](reports/HOLDOUT.md)). No supervised variant beat it in development ([backtest](reports/BACKTEST.md)). The best label-free detector improved on Isolation Forest but stays well below supervised detection ([backtest](reports/BACKTEST-UNSUPERVISED.md), [exploratory holdout](reports/HOLDOUT-UNSUPERVISED.md)). See [research progression](EXPERIMENT_HISTORY.md).
+
+**Account takeover is the blind spot.** In CERT's takeover scenario the attacker logs on as their supervisor. The deployed model reaches these incidents only through the attacker's own preparation; no day on a hijacked account ever passed its gate ([identity coverage](reports/IDENTITY_COVERAGE.md)). Takeover-aware population features, including other identities' logons on one's own computer, did not change that, and their small development gain reversed on the holdout ([ledger backtest](reports/BACKTEST-LEDGER.md), [holdout](reports/HOLDOUT-LEDGER.md)).
 
 Analyst feedback closes much of the gap without any initial labels. Starting from the label-free detector and learning only from verdicts on the cases it admits, the detector reached 40/61 development incidents against 29 without learning. In an exploratory holdout continuation it reached 16/18 new insiders with half the deployed model's investigations ([feedback](reports/FEEDBACK.md)). The analyst is simulated from the answer key.

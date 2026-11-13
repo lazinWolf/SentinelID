@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 import joblib
 
-from .ingestion import ROOT, digest
+from .ingestion import APP, ROOT, digest
 from .pipeline import (
     ADAPTIVE_CONFIG,
     ADAPTIVE_MARK,
@@ -143,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(SERVICE.presentation.snapshot(int(get("step", "0"))))
             if url.path not in ["/", "/workload.js", "/style.css"]:
                 return self.send({"error": "Not found"}, 404)
-            p = ROOT / "dashboard" / ("workload.html" if url.path == "/" else url.path[1:])
+            p = APP / "dashboard" / ("workload.html" if url.path == "/" else url.path[1:])
             b = p.read_bytes()
             self.send_response(200)
             self.send_header(

@@ -58,7 +58,13 @@ Eligibility precedes prediction. Eligible scores below the gate are still stored
 | Local service | `sentinelid/server.py` | HTTP queries/commands → replay control, case inspection and review updates |
 | Presentation playback | `sentinelid/presentation.py` | Committed scores + checkpoint decision trace → read-only day frames and pending-state views |
 | Interface | `dashboard/` | Service responses → tables, measurements and original evidence |
-| Entry point | `sentinelid/__main__.py` | CLI arguments → verification, status, server or replay |
+| Entry point | `sentinelid/__main__.py` | CLI arguments → verification, status, server, replay, demo or research |
+| Demo root | `sentinelid/demo.py` | Seed → invented CERT-layout organisation, demo model and summary |
+| Population ledger | `sentinelid/ledger.py` | Raw HTTP/email/logon → per identity-day aggregates → causal population-context features (research only) |
+
+### Project root
+
+Code and dashboard files are read from the checkout. Configuration, model, sources and application state come from the project root: the checkout by default, or the directory named by `SENTINELID_ROOT`. The demo is a complete root in `demo/`: `config.json` (the real settings, a demo model checksum and its own event count), `data/raw/{recovery-v3,workload-v4}` with the five CSVs and monthly LDAP files, `data/model.joblib` and `answers.json`. Every stage (fit, replay, serve) runs as a subprocess against that root, so the demo exercises the same code paths as the CERT replay. `tests/test_end_to_end.py` builds the same root in a temporary directory and checks source ordering, evidence retrieval, that the planted November incidents reach a case, and that an interrupted, resumed run equals an uninterrupted one bit for bit.
 
 ### Data and time contract
 
@@ -176,7 +182,7 @@ Evidence explains aggregate context; exact model-to-event attribution is not com
 
 ## Current boundaries
 
-The app is a local research demonstration with a fixed benchmark horizon. Live identity-provider connectors, production authentication, retraining of the frozen model and an outage feed are not implemented. Archived full evaluation and current operational replay are distinct execution paths.
+The app is a local research demonstration with a fixed benchmark horizon. It profiles each identity alone; the research ledger adds population context, but no ledger feature is deployed, and none detects a hijacked account in use (see [identity coverage](reports/IDENTITY_COVERAGE.md)). Live identity-provider connectors, production authentication, retraining of the frozen model and an outage feed are not implemented. Archived full evaluation and current operational replay are distinct execution paths.
 
 The presentation path is separate from original-event processing: `GET /api/demo?step=N` reads a completed run's observations and trusted checkpoint decision trace. It requires matching configuration identity (adaptive runs add their settings digest), displays recorded gate-passing offers against the frozen gate or an adaptive run's recorded day gates, and queue actions, and verifies its reconstructed final pending state/admission count against the checkpoint and cases. It does not generate new decisions or write to SQLite. Playback contains 30 scoring days and three drain steps; reset and display speed are browser controls. Case inspection uses the same stored measurements and verified original evidence as before. This is recorded-run playback, not a fault-injection simulator or a fresh benchmark evaluation.
 

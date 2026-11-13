@@ -392,9 +392,11 @@ Sections 1–17 describe the deployed application and preserved research from so
 | `sentinelid/adaptive.py` | Label-free tail scoring and analyst-feedback weights, shared by research and adaptive replay |
 | `sentinelid/research.py`, `research_data.py` | Holdout extraction, development backtest and once-only holdout evaluation |
 | `sentinelid/feedback.py` | Simulated-analyst feedback experiments and their report |
+| `sentinelid/ledger.py` | Population-context activity ledger and its causal features |
+| `sentinelid/demo.py` | Invented demo organisation, demo model and one-command demo |
 | `configs/`, `reports/` | Experiment protocols and generated reports |
 | `dashboard/` | Three maintained HTML/JS/CSS interface files |
-| `tests/` | Dataset-free pipeline and acquisition regressions |
+| `tests/` | Dataset-free regressions, including one end-to-end run on invented data |
 | `config.json` | Runtime horizon, feature/queue settings and model identity |
 | `setup-manifest.json` | Pinned acquisition and prepared-artifact contract |
 | `results.json` | Frozen comparison and measured verdict |

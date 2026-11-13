@@ -1,0 +1,70 @@
+{
+  "schema": "sentinelid-research-v1",
+  "round": 3,
+  "round_note": "Label-free detector with the same ledger groups. Declared before any ledger result existed; see research-ledger.json for the caveat on how the features were chosen. Amended before any ledger backtest ran: an `exposure` group (other identities' logons on the identity's own computers over the last 3 days) was added to the combined candidates and as its own candidate, after checking that scenario 3's takeover records fall under the victim's account.",
+  "output": "backtest-ledger-unsupervised",
+  "report": "reports/BACKTEST-LEDGER-UNSUPERVISED.md",
+  "fit_start": "2010-06-08",
+  "gate_quantile": 0.99,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "folds": [
+    {
+      "start": "2010-08-01",
+      "end": "2010-09-01"
+    },
+    {
+      "start": "2010-09-01",
+      "end": "2010-10-01"
+    },
+    {
+      "start": "2010-10-01",
+      "end": "2010-11-01"
+    },
+    {
+      "start": "2010-11-01",
+      "end": "2010-12-01"
+    }
+  ],
+  "baseline": "ecod_up_top5",
+  "selection_rule": "Highest mean timely incidents summed over folds, among candidates with mean admissions no greater than the ecod_up_top5 control and mean current-positive yield no lower; ties broken by yield.",
+  "candidates": [
+    {
+      "name": "ecod_up_top5",
+      "features": "c",
+      "model": "ecod_top5",
+      "policy": "max_cooldown",
+      "transform": "up"
+    },
+    {
+      "name": "ecod_up_top5_generic",
+      "features": "c",
+      "model": "ecod_top5",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "ledger": [
+        "rarity",
+        "email",
+        "pc",
+        "exposure"
+      ]
+    },
+    {
+      "name": "ecod_up_top5_all",
+      "features": "c",
+      "model": "ecod_top5",
+      "policy": "max_cooldown",
+      "transform": "up",
+      "ledger": [
+        "rarity",
+        "email",
+        "pc",
+        "job",
+        "exposure"
+      ]
+    }
+  ]
+}

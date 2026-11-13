@@ -8,7 +8,7 @@ frozen and refuses to run twice.
 import json
 import sqlite3
 import zlib
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from contextlib import closing
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -21,6 +21,7 @@ from sklearn.ensemble import (
     RandomForestClassifier,
 )
 
+from . import ledger
 from .adaptive import TailScorer, upward
 from .experiment_evaluation import evaluate
 from .experiment_features import TEMPORAL, corrected, measurements, vector
@@ -36,6 +37,7 @@ ANSWERS = "data/experiments/inputs/answers.tar.bz2"
 HOLDOUT_START = "2010-12-01"
 HOLDOUT_END = "2011-05-17"
 DEFAULT_CONFIG = "configs/research.json"
+LEDGER_START = "2010-05-01"
 
 
 def directory(root=ROOT):
@@ -166,8 +168,46 @@ def prepare(root=ROOT):
     return out
 
 
+def prepare_ledger(root=ROOT):
+    """Build the activity ledger once and align its features with the cached vectors."""
+    out = prepare(root)
+    marker = out / "ledger.json"
+    if marker.exists() and json.loads(marker.read_text())["names"] == ledger.names():
+        return out
+    source = directory(root) / "ledger"
+    built = source / "manifest.json"
+    manifest = json.loads(built.read_text()) if built.exists() else {}
+    if (manifest.get("start"), manifest.get("end")) != (LEDGER_START, HOLDOUT_END):
+        # The single raw pass; a new feature column only reruns the cheap feature step below.
+        manifest = ledger.build(LEDGER_START, HOLDOUT_END, source, root)
+    with np.load(out / "vectors.npz") as f:
+        days, identities = f["day"], f["identity"]
+    matrix = ledger.features(source, list(zip(map(str, days), map(str, identities), strict=True)))
+    np.savez_compressed(
+        out / "ledger.npz",
+        matrix=matrix,
+        names=np.asarray(ledger.names()),
+        day=days,
+        identity=identities,
+    )
+    save_json(
+        marker,
+        {
+            "names": ledger.names(),
+            "rows": len(days),
+            "ledger": manifest,
+            "ledger_sha256": digest(source / "ledger.sqlite"),
+            "matrix_sha256": digest(out / "ledger.npz"),
+            "vectors_sha256": digest(out / "vectors.npz"),
+            "semantics": "Causal features; the ledger holds no labels",
+        },
+    )
+    return out
+
+
 class Data:
     def __init__(self, root=ROOT):
+        self.root = root
         self.path = prepare(root)
         meta = json.loads((self.path / "prepared.json").read_text())
         with np.load(self.path / "vectors.npz") as f:
@@ -189,6 +229,20 @@ class Data:
             parts.append(self.v["peer"])
             names += PEER
         return np.concatenate(parts, axis=1), names
+
+    def ledger(self, groups):
+        """Ledger feature columns for the groups, aligned with this object's rows."""
+        if not hasattr(self, "_ledger"):
+            with np.load(prepare_ledger(self.root) / "ledger.npz") as f:
+                if not (
+                    np.array_equal(f["day"], self.days)
+                    and np.array_equal(f["identity"], self.v["identity"])
+                ):
+                    raise ValueError("Ledger features do not match the cached vectors")
+                self._ledger = (f["matrix"], list(f["names"]))
+        matrix, columns = self._ledger
+        wanted = ledger.names(groups)
+        return matrix[:, [columns.index(n) for n in wanted]], wanted
 
     def row(self, i, with_events=False):
         day, identity = str(self.days[i]), str(self.v["identity"][i])
@@ -249,8 +303,11 @@ MOVEMENT = (
 
 
 def design(data, candidate):
-    """Candidate inputs: optional upward-only percentiles and channel subset."""
+    """Candidate inputs: optional ledger groups, upward-only percentiles and channel subset."""
     x, names = data.features(candidate["features"])
+    if candidate.get("ledger"):
+        extra, extra_names = data.ledger(candidate["ledger"])
+        x, names = np.concatenate([x, extra], axis=1), names + extra_names
     if candidate.get("transform") == "up":
         x = upward(x, names)
     if candidate.get("subset") == "movement":
@@ -376,7 +433,59 @@ def measure(data, indices, scores, gate, queue, events, start, end):
     result, losses = evaluate(rows, scores, scores, gate, queue, events, protocol)
     for k in ("candidate_keys", "admission_keys", "priority_ranking", "detector_ranking"):
         result.pop(k)
+    result["role_coverage"] = coverage(data, indices, scores, gate, queue, events, start, end)
     return result, losses
+
+
+def role(event):
+    """`own` when the attacker acts under their own account, `hijacked` under someone else's."""
+    return "own" if event["observed_account"] == event["actor"] else "hijacked"
+
+
+def coverage(data, indices, scores, gate, queue, events, start, end, hours=72):
+    """Identity-attack coverage by scenario and account role.
+
+    For each (scenario, role): labelled identity-days, how many of them pass the gate, how many
+    incidents had a record of that role shown to an analyst within `hours` of the record, and
+    the hours from an incident's first such record to the first admission showing any of them.
+    """
+    current = {e: t for e, t in events.items() if start <= t["day"] < end}
+    flagged = {
+        (str(data.days[i]), str(data.v["identity"][i]))
+        for i, s in zip(indices, scores, strict=True)
+        if s >= gate
+    }
+    shown = defaultdict(list)
+    for case in queue.reviews:
+        for eid in case["evidence_ids"]:
+            if eid in current:
+                shown[eid].append(datetime.fromisoformat(case["decision_time"]))
+    groups = defaultdict(lambda: {"days": set(), "first": {}, "timely": set(), "reach": {}})
+    for eid, t in current.items():
+        g = groups[(t["scenario"], role(t))]
+        g["days"].add((t["day"], t["observed_account"]))
+        stamp = datetime.fromisoformat(t["timestamp"])
+        incident = t["incident_id"]
+        g["first"][incident] = min(g["first"].get(incident, stamp), stamp)
+        for decided in shown[eid]:
+            if 0 <= (decided - stamp).total_seconds() / 3600 <= hours:
+                g["timely"].add(incident)
+            g["reach"][incident] = min(g["reach"].get(incident, decided), decided)
+    result = {}
+    for (scenario, kind), g in sorted(groups.items()):
+        delays = [
+            (g["reach"][i] - g["first"][i]).total_seconds() / 3600
+            for i in g["first"]
+            if i in g["reach"]
+        ]
+        result.setdefault(scenario, {})[kind] = {
+            "identity_days": len(g["days"]),
+            "gate_days": len(g["days"] & flagged),
+            "incidents": len(g["first"]),
+            "timely_incidents": len(g["timely"]),
+            "first_record_to_admission_hours": sorted(delays),
+        }
+    return result
 
 
 def self_calibrate(data, indices, raw, statistic, days=28):
@@ -515,6 +624,7 @@ def summarize(config, results):
                 np.mean([r["detector_average_precision"] for r in runs])
             ),
             "gate_recall": float(np.mean([r["gate_recall"] for r in runs])),
+            "role_coverage": combine_coverage(runs),
         }
     base = table[config["baseline"]]
     eligible = [
@@ -528,6 +638,42 @@ def summarize(config, results):
         key=lambda t: (t["timely_incidents"]["mean"], t["current_positive_yield"]),
     )
     return {"candidates": table, "selected": best["name"]}
+
+
+COUNTS = ("identity_days", "gate_days", "incidents", "timely_incidents")
+
+
+def combine_coverage(runs):
+    """Role coverage summed over folds, then averaged over seeds."""
+    seeds = defaultdict(lambda: defaultdict(lambda: defaultdict(Counter)))
+    for r in runs:
+        for scenario, roles in r.get("role_coverage", {}).items():
+            for kind, values in roles.items():
+                seeds[r.get("seed", 0)][scenario][kind].update({k: values[k] for k in COUNTS})
+    result = {}
+    for per_seed in seeds.values():
+        for scenario, roles in per_seed.items():
+            for kind, values in roles.items():
+                target = result.setdefault(scenario, {}).setdefault(kind, dict.fromkeys(COUNTS, 0))
+                for k in COUNTS:
+                    target[k] += values[k] / len(seeds)
+    return result
+
+
+def coverage_lines(table):
+    """Markdown rows: candidate, scenario, role, gate days and timely incidents."""
+    lines = [
+        "| Candidate | Scenario | Account | Days over gate | Timely incidents |",
+        "| --- | --- | --- | ---: | ---: |",
+    ]
+    for name, t in table.items():
+        for scenario, roles in sorted(t["role_coverage"].items()):
+            for kind, v in sorted(roles.items(), reverse=True):
+                lines.append(
+                    f"| {name} | {scenario} | {kind} | {v['gate_days']:.1f} / "
+                    f"{v['identity_days']:.0f} | {v['timely_incidents']:.1f} / {v['incidents']:.0f} |"
+                )
+    return lines
 
 
 def policy_label(candidate):
@@ -563,6 +709,20 @@ def write_report(path, config, summary):
         f"**Selected for the sealed holdout: `{summary['selected']}`.**",
         "",
     ]
+    if any(t.get("role_coverage") for t in summary["candidates"].values()):
+        lines += [
+            "## Coverage by scenario and account",
+            "",
+            "Scenario 1 and 2 insiders act under their own account. Scenario 3 is an account "
+            "takeover: the attacker logs on to the supervisor's computer as the supervisor, so "
+            "its records fall under two accounts, `own` (the attacker's preparation) and "
+            "`hijacked` (the victim's account in use). Days are labelled identity-days; an "
+            "incident counts once per account role when a record under that role reaches an "
+            "analyst within 72 hours.",
+            "",
+            *coverage_lines(summary["candidates"]),
+            "",
+        ]
     path.parent.mkdir(exist_ok=True)
     path.write_text("\n".join(lines))
 
@@ -753,5 +913,129 @@ def write_holdout_report(root=ROOT, stage="holdout"):
         f"{np.median([h['official_onset_delay_hours'] for h in deployed['timely_hits'].values()]):.1f} hours",
         "",
     ]
+    if all("role_coverage" in r for r in result["runs"]):
+        table = {
+            name: {"role_coverage": combine_coverage(runs)} for (_, name), runs in groups.items()
+        }
+        lines += [
+            "## Coverage by scenario and account",
+            "",
+            "Means over seeds. `hijacked` is scenario 3's victim account in use by the attacker.",
+            "",
+            *coverage_lines(table),
+            "",
+        ]
     suffix = stage.removeprefix("holdout").upper()
     (root / f"reports/HOLDOUT{suffix}.md").write_text("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
+# Identity-attack coverage of the frozen deployed model (descriptive, no selection).
+
+SCENARIOS = {
+    "1": "Data theft before leaving: after-hours logons, USB use, upload to wikileaks.org",
+    "2": "Job hunting, then data theft to a USB drive before leaving",
+    "3": "Account takeover: keylogger planted on the supervisor's computer, then mass email "
+    "sent while logged on as the supervisor",
+}
+
+
+def identity_coverage(root=ROOT):
+    """Re-measure the deployed model's already-reported November and holdout scores by role."""
+    data = Data(root)
+    queue_config = json.loads((root / "config.json").read_text())["queue"]
+    deployed = joblib.load(root / "data/model.joblib")
+    x4, names = data.features("v4")
+    if names != deployed["names"]:
+        raise ValueError("Deployed model inputs differ from the v4 vectors")
+    freeze = json.loads((directory(root) / "holdout/freeze.json").read_text())
+    with np.load(directory(root) / "holdout/frozen-scores.npz") as f:
+        held = f["arr_0"]
+    if freeze["scorers"][0]["name"] != "deployed (frozen, fit Jun-Oct)":
+        raise ValueError("Unexpected first frozen scorer")
+    periods = {}
+    for name, start, end, scores in (
+        ("november", "2010-11-01", DEVELOPMENT_END, None),
+        ("holdout", HOLDOUT_START, HOLDOUT_END, held),
+    ):
+        test = window(data, start, end)
+        s = deployed["model"].predict_proba(x4[test])[:, 1] if scores is None else scores
+        gate = float(deployed["gates"]["fit"])
+        queue = replay(data, test, s, gate, start, end, "max_cooldown", queue_config)
+        events = truth(root / ANSWERS, day_after(start, -7), end)
+        metrics, losses = measure(data, test, s, gate, queue, events, start, end)
+        periods[name] = {
+            "span": [start, end],
+            "admissions": metrics["admissions"],
+            "current_positive": metrics["current_positive"],
+            "timely_incidents": metrics["timely_incidents"],
+            "incidents_available": metrics["incidents_available"],
+            "role_coverage": metrics["role_coverage"],
+            "losses_by_scenario": {
+                sc: dict(Counter(x["terminal"] for x in losses if x["scenario"] == sc))
+                for sc in sorted({x["scenario"] for x in losses})
+            },
+        }
+        print(name, metrics["admissions"], metrics["timely_incidents"], flush=True)
+    result = {
+        "model": "deployed (frozen, fit Jun 8 - Oct 14 2010)",
+        "periods": periods,
+        "semantics": "Descriptive re-measurement of scores already evaluated; nothing is selected",
+    }
+    save_json(directory(root) / "identity-coverage.json", result)
+    write_coverage_report(root, result)
+    return result
+
+
+def write_coverage_report(root, result):
+    lines = [
+        "# Identity-attack coverage",
+        "",
+        "How the frozen deployed model's already-reported results split by attack scenario and by "
+        "whose account the malicious activity was recorded under. Nothing here was used to select "
+        "or tune anything; the holdout scores are the ones frozen before its labels were read.",
+        "",
+        "## Scenarios in CERT r4.2",
+        "",
+        "| Scenario | Behaviour | Accounts involved |",
+        "| --- | --- | --- |",
+        f"| 1 | {SCENARIOS['1']} | the insider's own |",
+        f"| 2 | {SCENARIOS['2']} | the insider's own |",
+        f"| 3 | {SCENARIOS['3']} | the attacker's own, then the victim's (`hijacked`) |",
+        "",
+    ]
+    for name, p in result["periods"].items():
+        lines += [
+            f"## {name.capitalize()} ({p['span'][0]} to {p['span'][1]}, exclusive)",
+            "",
+            f"{p['admissions']} investigations, {p['current_positive']} current-positive, "
+            f"{p['timely_incidents']}/{p['incidents_available']} incidents reached in time.",
+            "",
+            "| Scenario | Account | Labelled days over the gate | Incidents reached within 72 h "
+            "| Median hours, first record to admission |",
+            "| --- | --- | ---: | ---: | ---: |",
+        ]
+        for scenario, roles in sorted(p["role_coverage"].items()):
+            for kind, v in sorted(roles.items(), reverse=True):
+                delays = v["first_record_to_admission_hours"]
+                median = f"{np.median(delays):.0f}" if delays else "never shown"
+                lines.append(
+                    f"| {scenario} | {kind} | {v['gate_days']} / {v['identity_days']} | "
+                    f"{v['timely_incidents']} / {v['incidents']} | {median} |"
+                )
+        lines += [
+            "",
+            "Where labelled records ended up (event counts): "
+            + "; ".join(
+                f"scenario {sc}: " + ", ".join(f"{k} {n}" for k, n in sorted(c.items()))
+                for sc, c in p["losses_by_scenario"].items()
+            )
+            + ".",
+            "",
+        ]
+    lines += [
+        "`admitted_context` means the record was shown in an investigation; `threshold` means its "
+        "day scored below the gate; `cooldown`, `expiry` and `budget_pending` are queue losses.",
+        "",
+    ]
+    (root / "reports/IDENTITY_COVERAGE.md").write_text("\n".join(lines))

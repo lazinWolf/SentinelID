@@ -3,7 +3,16 @@ name = "sentinelid"
 version = "0.2.0"
 description = "Original-event behavioral detection, durable replay and investigation"
 requires-python = ">=3.11"
-dependencies = ["joblib>=1.6,<2", "numpy>=2,<3", "scikit-learn>=1.9,<2"]
+dependencies = [
+    "joblib>=1.6,<2",
+    "numpy>=2,<3",
+    "scikit-learn>=1.9,<2",
+    "scipy>=1.18,<2",
+]
+license = "MIT"
+
+[project.scripts]
+sentinelid = "sentinelid.__main__:main"
 
 [tool.ruff]
 line-length = 100

@@ -34,7 +34,9 @@ def main():
     research = commands.add_parser(
         "research", help="Development backtest and once-only sealed holdout evaluation"
     )
-    research.add_argument("stage", choices=["extract", "backtest", "holdout", "feedback"])
+    research.add_argument(
+        "stage", choices=["extract", "ledger", "backtest", "holdout", "feedback", "coverage"]
+    )
     research.add_argument(
         "--config",
         help="Default: configs/research.json (configs/research-feedback.json for feedback)",
@@ -55,6 +57,12 @@ def main():
     web = commands.add_parser("serve", help="Serve the local investigation dashboard")
     web.add_argument("--host", default="127.0.0.1")
     web.add_argument("--port", type=int, default=8767)
+    demo = commands.add_parser(
+        "demo", help="Invented organisation: generate, fit a demo model, replay and serve"
+    )
+    demo.add_argument("--port", type=int, default=8767)
+    demo.add_argument("--fresh", action="store_true", help="Regenerate the demo from scratch")
+    demo.add_argument("--no-serve", action="store_true", help="Prepare the demo without serving")
     replay = commands.add_parser("replay", help="Process originals into separate application state")
     replay.add_argument("--new", action="store_true", help="Preserve prior runs and start another")
     replay.add_argument("--events", type=int, help="Limit additional events for this invocation")
@@ -89,6 +97,8 @@ def main():
                 research.extract_holdout()
                 print("Archive-equal rebuilt rows:", research.check_extraction(), flush=True)
                 research.prepare()
+            elif args.stage == "ledger":
+                research.prepare_ledger()
             elif args.stage == "feedback":
                 from . import feedback
 
@@ -97,6 +107,8 @@ def main():
                     feedback.robustness(config, with_holdout=args.holdout)
                 else:
                     (feedback.holdout if args.holdout else feedback.run)(config)
+            elif args.stage == "coverage":
+                research.identity_coverage()
             elif args.stage == "backtest":
                 print(
                     json.dumps(
@@ -128,6 +140,10 @@ def main():
                     indent=2,
                 )
             )
+        elif args.command == "demo":
+            from .demo import run as demo_run
+
+            demo_run(args.port, args.fresh, not args.no_serve)
         elif args.command == "serve":
             from .server import serve
 

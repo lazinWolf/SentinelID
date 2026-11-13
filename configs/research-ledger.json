@@ -1,0 +1,118 @@
+{
+  "schema": "sentinelid-research-v1",
+  "round": 3,
+  "round_note": "Ledger features: causal population rarity of HTTP destinations, a job-site rate, email recipient breadth and logons on computers owned by another identity. Declared before any ledger result existed. Feature ideas were informed by inspecting the development period's labelled events (scenario 3 visits keylogger sites that almost nobody else visits; scenario 2 visits job sites), so held-out value is untested; the December-May holdout is not used for selection. Amended before any ledger backtest ran: an `exposure` group (other identities' logons on the identity's own computers over the last 3 days) was added to the combined candidates and as its own candidate, after checking that scenario 3's takeover records fall under the victim's account.",
+  "output": "backtest-ledger",
+  "report": "reports/BACKTEST-LEDGER.md",
+  "fit_start": "2010-06-08",
+  "gate_quantile": 0.99,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "folds": [
+    {
+      "start": "2010-08-01",
+      "end": "2010-09-01"
+    },
+    {
+      "start": "2010-09-01",
+      "end": "2010-10-01"
+    },
+    {
+      "start": "2010-10-01",
+      "end": "2010-11-01"
+    },
+    {
+      "start": "2010-11-01",
+      "end": "2010-12-01"
+    }
+  ],
+  "baseline": "corrected",
+  "selection_rule": "Highest mean timely incidents summed over folds, among candidates with mean admissions no greater than the corrected control and mean current-positive yield no lower; ties broken by yield. The deployed recipe is shown for reference only.",
+  "candidates": [
+    {
+      "name": "deployed_recipe",
+      "features": "v4",
+      "model": "rf",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "corrected",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "ledger_rarity",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "ledger": [
+        "rarity"
+      ]
+    },
+    {
+      "name": "ledger_email",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "ledger": [
+        "email"
+      ]
+    },
+    {
+      "name": "ledger_pc",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "ledger": [
+        "pc"
+      ]
+    },
+    {
+      "name": "ledger_job",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "ledger": [
+        "job"
+      ]
+    },
+    {
+      "name": "ledger_exposure",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "ledger": [
+        "exposure"
+      ]
+    },
+    {
+      "name": "ledger_generic",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "ledger": [
+        "rarity",
+        "email",
+        "pc",
+        "exposure"
+      ]
+    },
+    {
+      "name": "ledger_all",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "ledger": [
+        "rarity",
+        "email",
+        "pc",
+        "job",
+        "exposure"
+      ]
+    }
+  ]
+}

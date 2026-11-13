@@ -4,7 +4,7 @@ The deployed application remains the historical baseline. `experiment` is a sepa
 
 ## Reproduction
 
-This milestone needs the **local research archive**, prepared original data and pinned project environment. A public clone alone does not include the archive or archived labels/feature cache. Follow README runtime setup first. Archive SHA-256 is recorded in the project summary and verified before extraction.
+This milestone needs the **local research archive**, prepared original data and pinned project environment. A public clone alone does not include the archive or archived labels/feature cache. Follow README runtime setup first. Archive SHA-256 is recorded in the README (Archive section) and verified before extraction.
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -q
@@ -35,7 +35,7 @@ A process lock prevents competing writers. Batches atomically commit observation
 
 The compact corrected results are exported to [EXPERIMENT_COMPARISON.md](reports/EXPERIMENT_COMPARISON.md) and `reports/experiment-comparison.json`. The completed milestone's [measured findings](reports/EXPERIMENT_FINDINGS.md) add numerical interactions and set disagreements; its [preservation evidence](reports/experiment-preservation.json) records full checks. [EXPERIMENT_HISTORY.md](EXPERIMENT_HISTORY.md) keeps historical stages separate. Historical results are excluded from corrected tables, paired effects and configuration selection.
 
-The recorded run is `abcd831c3f4e3171fa84`; all 16 configurations completed 30 scoring days and three drain decisions after a separate-process resume. The 33-test suite, source verification, lint and compilation passed. All eight native variants matched the maintained queue's cases/decisions exactly. A shared evidence pass resolved 77,482 original pointers and checked 63 real identity-day count reconstructions.
+The recorded run is `abcd831c3f4e3171fa84`; all 16 configurations completed 30 scoring days and three drain decisions after a separate-process resume. The test suite as it stood then (33 tests), source verification, lint and compilation passed. All eight native variants matched the maintained queue's cases/decisions exactly. A shared evidence pass resolved 77,482 original pointers and checked 63 real identity-day count reconstructions.
 
 ## Feature contracts and reusable measurements
 

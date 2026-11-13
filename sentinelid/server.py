@@ -108,9 +108,18 @@ class WorkloadService:
 
 
 SERVICE = None
+# Host headers the service answers to. A page on another site can rebind its own name to
+# 127.0.0.1; checking Host (not only Origin) keeps it from reading cases or posting reviews.
+HOSTS = None
+COMMANDS = {"/api/review", "/api/start", "/api/pause", "/api/new"}
+COMMAND_LOCK = threading.Lock()
 
 
 class Handler(BaseHTTPRequestHandler):
+    def check_host(self):
+        if HOSTS is not None and self.headers.get("Host") not in HOSTS:
+            raise PermissionError("Host rejected")
+
     def send(self, obj, status=200):
         b = json.dumps(obj, allow_nan=False).encode()
         self.send_response(status)
@@ -122,6 +131,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
+            self.check_host()
             url = urlparse(self.path)
             q = parse_qs(url.query)
 
@@ -159,20 +169,26 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(b)
+        except PermissionError as e:
+            self.send({"error": str(e)}, 403)
         except Exception as e:
             self.send({"error": str(e)}, 400)
 
     def do_POST(self):
         try:
+            self.check_host()
             origin = self.headers.get("Origin")
             host = self.headers.get("Host")
             if origin and urlparse(origin).netloc != host:
                 raise ValueError("Origin rejected")
+            path = urlparse(self.path).path
+            if path not in COMMANDS:
+                return self.send({"error": "Not found"}, 404)
             n = int(self.headers.get("Content-Length", "0"))
-            if n > 20000:
+            if not 0 <= n <= 20000:
                 raise ValueError("Request too large")
             payload = json.loads(self.rfile.read(n) or b"{}")
-            action = self.path.rsplit("/", 1)[-1]
+            action = path.removeprefix("/api/")
             if action == "review":
                 return self.send(
                     SERVICE.store.review(
@@ -183,7 +199,10 @@ class Handler(BaseHTTPRequestHandler):
                         payload.get("note", ""),
                     )
                 )
-            return self.send(SERVICE.command(action))
+            with COMMAND_LOCK:
+                return self.send(SERVICE.command(action))
+        except PermissionError as e:
+            self.send({"error": str(e)}, 403)
         except Exception as e:
             self.send({"error": str(e)}, 400)
 
@@ -196,8 +215,16 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(host="127.0.0.1", port=8767):
-    global SERVICE
+    global SERVICE, HOSTS
     SERVICE = WorkloadService()
+    if host in ("0.0.0.0", "::", ""):
+        HOSTS = None
+        print("Warning: listening on every interface with no authentication.", flush=True)
+    else:
+        names = {host} | (
+            {"127.0.0.1", "localhost"} if host in ("127.0.0.1", "localhost") else set()
+        )
+        HOSTS = {f"{name}:{port}" for name in names}
     server = ThreadingHTTPServer((host, port), Handler)
     try:
         server.serve_forever()

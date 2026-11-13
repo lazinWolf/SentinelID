@@ -1,0 +1,76 @@
+{
+  "schema": "sentinelid-research-v1",
+  "round": "3b",
+  "round_note": "Development-only check after a defect fix, not a new round. The round 3 ledger stored an owner's exposure only on days the owner had activity or a visit that same day, so 12,897 of 63,356 exposed owner-days entered later references as zero (ledger VERSION 2 fixes this). Only the candidates that read exposure, and the control, are rerun with the round 3 settings. The holdout is not used: whatever the result, the round 3 holdout verdict stands as recorded, and a changed development result would only be reported.",
+  "output": "backtest-ledger-fix",
+  "report": "reports/BACKTEST-LEDGER-FIX.md",
+  "fit_start": "2010-06-08",
+  "gate_quantile": 0.99,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "folds": [
+    {
+      "start": "2010-08-01",
+      "end": "2010-09-01"
+    },
+    {
+      "start": "2010-09-01",
+      "end": "2010-10-01"
+    },
+    {
+      "start": "2010-10-01",
+      "end": "2010-11-01"
+    },
+    {
+      "start": "2010-11-01",
+      "end": "2010-12-01"
+    }
+  ],
+  "baseline": "corrected",
+  "selection_rule": "Highest mean timely incidents summed over folds, among candidates with mean admissions no greater than the corrected control and mean current-positive yield no lower; ties broken by yield.",
+  "candidates": [
+    {
+      "name": "corrected",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown"
+    },
+    {
+      "name": "ledger_exposure",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "ledger": [
+        "exposure"
+      ]
+    },
+    {
+      "name": "ledger_generic",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "ledger": [
+        "rarity",
+        "email",
+        "pc",
+        "exposure"
+      ]
+    },
+    {
+      "name": "ledger_all",
+      "features": "c",
+      "model": "rf",
+      "policy": "max_cooldown",
+      "ledger": [
+        "rarity",
+        "email",
+        "pc",
+        "job",
+        "exposure"
+      ]
+    }
+  ]
+}

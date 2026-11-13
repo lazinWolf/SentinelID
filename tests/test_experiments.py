@@ -21,7 +21,6 @@ from sentinelid.experiment_features import (
     ModuleOutput,
     corrected,
     measurements,
-    ranking_vector,
     vector,
 )
 from sentinelid.experiment_io import capture_preservation, isolated_path
@@ -95,10 +94,6 @@ class ModuleTests(unittest.TestCase):
         self.assertEqual(t, ModuleOutput.create(t.as_dict()))
         self.assertEqual(p.as_dict()["support"]["users"], 11)
         self.assertTrue(p.as_dict()["support"]["self_excluded"])
-        rank_values, rank_names = ranking_vector(0.8, x, names, t, p, False, False)
-        self.assertEqual(rank_names[0], "detector_score")
-        self.assertEqual(rank_values[0], 0.8)
-        self.assertFalse(any("peer" in k or "temporal" in k or "identity" in k for k in rank_names))
 
     def test_temporal_formula_daily_cooccurrence_and_future_isolation(self):
         row, daily = fixture()

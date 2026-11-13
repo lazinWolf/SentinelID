@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from sentinelid.ledger import build, day_of, features, is_job, names
+from sentinelid.ledger import SERIES, State, build, day_of, features, is_job, names
 
 START = date(2010, 5, 1)
 
@@ -148,6 +148,19 @@ class LedgerTests(unittest.TestCase):
         self.assertGreater(two_later, 0.4)  # still inside the three days to date
         self.assertEqual(three_later, 0.0)
         self.assertEqual(visitor, 0.0)  # the visitor is not the one exposed
+
+    def test_exposure_is_kept_on_days_the_owner_is_silent(self):
+        state = State()
+        state.logons["pc-a"]["a"] = 20
+        state.owner["pc-a"] = "a"
+        column = SERIES.index("exposure")
+        for ordinal, logon in ((10, {"b": {"pc-a": 2}}), (11, {}), (12, {}), (13, {})):
+            exposed = state.visited(ordinal, logon)
+            series = {u: state.today(u, ordinal, None, None, logon.get(u)) for u in exposed}
+            state.update(ordinal, {}, logon, {u: v for u, (v, _) in series.items()})
+        history = state.values["a"]
+        self.assertEqual([history[o][column] for o in (10, 11, 12)], [2, 2, 2])
+        self.assertNotIn(13, history)  # outside the three days, nothing to record
 
     def test_mass_email_breadth(self):
         http, email, logon = self.fixture()

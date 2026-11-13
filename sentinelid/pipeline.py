@@ -238,6 +238,8 @@ def verify_model(originals=False):
 class WorkloadReplay:
     # Frozen-model runs keep these unset; adaptive runs checkpoint them with the queue.
     scorer = adaptive = daily = None
+    # Decision times still owed for days that closed together, when a run paused between them.
+    due = ()
 
     def __init__(self, path=None, new=False, adaptive=False):
         self.cfg = verify_model()
@@ -288,15 +290,19 @@ class WorkloadReplay:
             self.commit([], [])
         else:
             if old["experiment_identity"] != self.identity:
+                self.close()
                 raise ValueError("Preserve incompatible run and create a new run")
             self.run_id = old["id"]
             self.status = old["status"]
             with self.store.connection() as db:
-                state = pickle.loads(
-                    db.execute("SELECT checkpoint FROM runs WHERE id=?", (self.run_id,)).fetchone()[
-                        0
-                    ]
-                )
+                checkpoint = db.execute(
+                    "SELECT checkpoint FROM runs WHERE id=?", (self.run_id,)
+                ).fetchone()[0]
+            if checkpoint is None:
+                # Creation was interrupted between the run row and its first checkpoint.
+                self.close()
+                raise ValueError("The latest run has no checkpoint; start a new run with --new")
+            state = pickle.loads(checkpoint)
             for k, v in state.items():
                 setattr(self, k, v)
         start = self.last_key[0] if self.last_key else None
@@ -483,6 +489,7 @@ class WorkloadReplay:
                 "last_key",
                 "pointer_cache",
                 "pending_decision",
+                "due",
                 "last_closed",
                 "scorer",
                 "daily",
@@ -518,13 +525,26 @@ class WorkloadReplay:
                 (self.status, self.cursor, pickle.dumps(state, protocol=5), self.run_id),
             )
 
+    def settle(self, checkpoint_on_pending):
+        """Take each owed daily decision in order; pause before one that has candidates."""
+        cases = []
+        while self.due:
+            self.pending_decision, self.due = self.due[0], self.due[1:]
+            if checkpoint_on_pending and self.queue.pending:
+                self.checkpoint_requested = True
+                break
+            cases.extend(self.decide())
+        return cases
+
     def step(self, count=100000, checkpoint_on_pending=False):
         out = []
         cases = []
         self.checkpoint_requested = False
         try:
             cases.extend(self.decide())
-            if self.scorer and checkpoint_on_pending and cases:
+            if not (self.scorer and checkpoint_on_pending and cases):
+                cases.extend(self.settle(checkpoint_on_pending))
+            if self.checkpoint_requested or (self.scorer and checkpoint_on_pending and cases):
                 # Stop after admission so the analyst can review before the next scored day.
                 self.checkpoint_requested = True
                 self.commit([], cases)
@@ -555,22 +575,22 @@ class WorkloadReplay:
                 self.last_key = (e.timestamp, e.event_id)
                 if self.stream.day != previous:
                     out.extend(self.closed(rr))
-                    day = previous
+                    day, due = previous, []
                     while day < self.stream.day:
                         if (
                             self.cfg["final"]["validation_start"]
                             <= day.isoformat()
                             < self.cfg["final"]["validation_end"]
                         ):
-                            self.pending_decision = (
-                                datetime.combine(day + timedelta(days=1), datetime.min.time())
-                                + timedelta(hours=self.cfg["queue"]["decision_hour"])
-                            ).isoformat()
-                            if checkpoint_on_pending and self.queue.pending:
-                                self.checkpoint_requested = True
-                                break
-                            cases.extend(self.decide())
+                            due.append(
+                                (
+                                    datetime.combine(day + timedelta(days=1), datetime.min.time())
+                                    + timedelta(hours=self.cfg["queue"]["decision_hour"])
+                                ).isoformat()
+                            )
                         day += timedelta(days=1)
+                    self.due = due
+                    cases.extend(self.settle(checkpoint_on_pending))
                     if self.checkpoint_requested:
                         break
             self.commit(out, cases)

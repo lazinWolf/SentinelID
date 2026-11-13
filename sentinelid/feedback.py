@@ -7,6 +7,7 @@ Unadmitted identity-days never contribute labels.
 """
 
 import json
+from contextlib import closing
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,9 +25,12 @@ from .research import (
     HOLDOUT_START,
     Data,
     ResearchQueue,
+    check_unsealed,
     day_after,
     design,
     directory,
+    holdout_uses,
+    mark_started,
     window,
 )
 from .research_data import truth
@@ -216,12 +220,6 @@ def holdout_events(config, root):
     return events, fresh
 
 
-def previous_holdout_uses(root):
-    return sorted(
-        str(p.relative_to(directory(root))) for p in directory(root).glob("holdout*/result.json")
-    )
-
-
 def run(config_path=DEFAULT_CONFIG, root=ROOT):
     config, data, x, names, queue_config = setting(config_path, root)
     events = truth(root / ANSWERS, day_after(config["start"], -7), config["end"])
@@ -254,10 +252,10 @@ def run(config_path=DEFAULT_CONFIG, root=ROOT):
 def holdout(config_path=DEFAULT_CONFIG, root=ROOT):
     """Exploratory reuse: keep learning online from August through the holdout months."""
     out = directory(root) / "holdout-feedback"
-    if (out / "result.json").exists():
-        raise ValueError("Feedback holdout already evaluated: " + str(out / "result.json"))
-    previous = previous_holdout_uses(root)
+    check_unsealed(out)
+    previous = holdout_uses(root)
     config, data, x, _, queue_config = setting(config_path, root)
+    mark_started(out, previous)
     events, fresh = holdout_events(config, root)
     results = {}
     for variant in config["variants"]:
@@ -283,9 +281,9 @@ def robustness(config_path=DEFAULT_CONFIG, root=ROOT, with_holdout=False):
     variant = {"lambda": settings["lambda"]}
     if with_holdout:
         out = directory(root) / "holdout-feedback-robustness"
-        if (out / "result.json").exists():
-            raise ValueError("Robustness holdout already evaluated: " + str(out / "result.json"))
-        previous = previous_holdout_uses(root)
+        check_unsealed(out)
+        previous = holdout_uses(root)
+        mark_started(out, previous)
         events, fresh = holdout_events(config, root)
     else:
         events = truth(root / ANSWERS, day_after(config["start"], -7), config["end"])
@@ -524,8 +522,13 @@ def robustness_section(saved, control):
         "Seeds beating control |",
         "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
+    robust = []
     for name, runs in saved["analysts"].items():
         yields = [r["current_positive"] / r["admissions"] for r in runs]
+        robust.append(
+            np.mean([r["timely_incidents"] for r in runs]) > c["timely_incidents"]
+            and np.mean(yields) >= c["current_positive"] / c["admissions"]
+        )
         beats = sum(
             r["timely_incidents"] > c["timely_incidents"]
             and r["current_positive"] / r["admissions"] >= c["current_positive"] / c["admissions"]
@@ -537,6 +540,11 @@ def robustness_section(saved, control):
             f"{spread([r['admissions'] for r in runs])} | {np.mean(yields):.2f} | "
             f"{beats}/{len(runs)} |"
         )
+    lines += [
+        "",
+        "Predeclared criterion (the mean over seeds beats the control on timely incidents and "
+        f"yield, for every analyst): **{'met' if all(robust) else 'not met'}**.",
+    ]
     return lines
 
 
@@ -610,7 +618,7 @@ def app_comparison(config_path=DEFAULT_CONFIG, root=ROOT):
     try:
         while worker.status != "completed":
             worker.step(200_000, checkpoint_on_pending=True)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db:
                 new = db.execute(
                     "SELECT id,payload FROM cases WHERE run=? ORDER BY decision,id",
                     (worker.run_id,),
@@ -623,7 +631,7 @@ def app_comparison(config_path=DEFAULT_CONFIG, root=ROOT):
                     reviewed.add(cid)
     finally:
         worker.close()
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db:
         cases = [
             json.loads(p) for (p,) in db.execute("SELECT payload FROM cases ORDER BY decision")
         ]
@@ -654,6 +662,8 @@ def app_comparison(config_path=DEFAULT_CONFIG, root=ROOT):
 
 def write_app_report(root, result):
     harness, app = result["harness"]["admissions"], result["app"]["admissions"]
+    margin = result["largest_margin_difference"]
+    margin = "none shared" if margin is None else f"{margin:.3g}"
     lines = [
         "# Adaptive app against the research harness",
         "",
@@ -672,7 +682,7 @@ def write_app_report(root, result):
         f"- Identical admissions (identity and decision time, in order): "
         f"**{'yes' if result['admissions_equal'] else 'no'}**.",
         f"- Identity-days scored by both: {result['scored_rows']['shared']}; largest difference "
-        f"in score minus day gate: {result['largest_margin_difference']:.3g}.",
+        f"in score minus day gate: {margin}.",
         "",
     ]
     if not result["admissions_equal"]:

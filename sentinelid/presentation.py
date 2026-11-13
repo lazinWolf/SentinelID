@@ -6,6 +6,7 @@ import pickle
 import sqlite3
 import threading
 from collections import Counter, defaultdict
+from contextlib import closing
 from datetime import datetime, timedelta
 
 from .pipeline import ADAPTIVE_MARK
@@ -112,8 +113,8 @@ class RunPresentation:
             key = (run["id"], run["events_processed"])
             if key != self.key:
                 # The model and trace are trusted local artifacts, as in operational resume.
-                with sqlite3.connect(
-                    "file:" + str(self.store.path.resolve()) + "?mode=ro", uri=True
+                with closing(
+                    sqlite3.connect("file:" + str(self.store.path.resolve()) + "?mode=ro", uri=True)
                 ) as db:
                     checkpoint = db.execute(
                         "SELECT checkpoint FROM runs WHERE id=?", (run["id"],)
@@ -158,8 +159,8 @@ class RunPresentation:
             if not 0 <= step < len(self.frames):
                 raise ValueError("Playback day is outside the recorded interval")
             frame = copy.deepcopy(self.frames[step])
-            with sqlite3.connect(
-                "file:" + str(self.store.path.resolve()) + "?mode=ro", uri=True
+            with closing(
+                sqlite3.connect("file:" + str(self.store.path.resolve()) + "?mode=ro", uri=True)
             ) as db:
                 frame["sample_measurements"] = [
                     json.loads(r[0])

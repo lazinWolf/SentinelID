@@ -92,12 +92,17 @@ async function refresh() {
     message(error);
   }
 }
+function verdictText(v) {
+  const extra = v.selected_reviews - v.comparator_reviews;
+  const cost = extra > 0 ? `Higher observed reach came with ${extra} extra admission${extra === 1 ? '' : 's'}.` : 'It used no more investigations.';
+  return `Verdict: ${v.verdict}. RF reached ${v.selected_timely} incidents with ${v.selected_reviews} investigations; IF reached ${v.comparator_timely} with ${v.comparator_reviews}. ${cost} November is consumed retrospective evidence.`;
+}
 function renderResults() {
   const rows = summary.validation?.frontier || [];
   const rf = rows.find(r => r.selected), other = rows.find(r => r.system === 'C_IF/fit/max_cooldown/1');
-  $('result-cards').innerHTML = rf ? stat('RF timely incident reach', `${rf.timely_incidents} / ${rf.incidents_available}`, 'Retained evidence within 72 hours') + stat('RF current-positive yield', `${fixed(100 * rf.current_positive_reviews / rf.reviews, 1)}%`, `${rf.current_positive_reviews} of ${rf.reviews} investigations`) + stat('RF actual admissions', num(rf.reviews), 'One daily admission budget') + (other ? stat('IF timely incident reach', `${other.timely_incidents} / ${other.incidents_available}`, `${other.reviews} actual admissions`) : '') : '';
+  $('result-cards').innerHTML = rf ? stat('RF timely incident reach', `${rf.timely_incidents} / ${rf.incidents_available}`, 'Retained evidence within 72 hours') + stat('RF current-positive yield', rf.reviews ? `${fixed(100 * rf.current_positive_reviews / rf.reviews, 1)}%` : '—', `${rf.current_positive_reviews} of ${rf.reviews} investigations`) + stat('RF actual admissions', num(rf.reviews), 'One daily admission budget') + (other ? stat('IF timely incident reach', `${other.timely_incidents} / ${other.incidents_available}`, `${other.reviews} actual admissions`) : '') : '';
   $('results').innerHTML = table(['System', 'Daily cap', 'Admissions', 'Current-positive', 'Context-positive', 'Timely incidents'], rows.map(r => [r.selected ? '<strong>Random Forest</strong><small>Supervised · selected baseline</small>' : '<strong>Isolation Forest</strong><small>Unsupervised comparator</small>', num(r.capacity), num(r.reviews), num(r.current_positive_reviews), num(r.context_positive_reviews), `${r.timely_incidents} / ${r.incidents_available}`]));
-  $('status').textContent = summary.demo ? `${summary.demo}. Counts are scored against the demo's own planted incidents.` : summary.verdict ? 'Improvement not established under the declared criterion: RF used 31 investigations versus IF’s 30. Higher observed reach came with one extra admission. November is consumed retrospective evidence.' : 'Saved evaluation results are unavailable.';
+  $('status').textContent = summary.demo ? `${summary.demo}. Counts are scored against the demo's own planted incidents.` : summary.verdict ? verdictText(summary.verdict) : 'Saved evaluation results are unavailable.';
 }
 async function loadCases() {
   const request = ++listRequest;

@@ -151,6 +151,20 @@ class ResearchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "already evaluated"):
                 holdout(root)
 
+    def test_interrupted_holdout_counts_as_a_use(self):
+        from sentinelid.research import check_unsealed, holdout_uses, mark_started
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            done = root / "data/research/holdout/result.json"
+            done.parent.mkdir(parents=True)
+            done.write_text("{}")
+            crashed = root / "data/research/holdout-x"
+            mark_started(crashed, holdout_uses(root))  # labels read, then the run died
+            with self.assertRaisesRegex(ValueError, "already evaluated"):
+                check_unsealed(crashed)
+            self.assertEqual(holdout_uses(root), ["holdout-x/started.json", "holdout/result.json"])
+
     def test_persistence_ranking_prefers_repeated_offers(self):
         keys = [("2010-12-01", "a"), ("2010-12-01", "x"), ("2010-12-02", "a"), ("2010-12-02", "b")]
         data = FakeData(keys)

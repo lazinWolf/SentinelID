@@ -39,6 +39,8 @@ lambda = 0.3 with 10 seeds per analyst. `flip` inverts any verdict with that pro
 | flip_20 | 18.0 (15-23) | 34.7 (23-41) | 101.3 (89-123) | 0.60 | 9/10 |
 | miss_30 | 14.9 (7-21) | 32.8 (23-41) | 106.4 (88-124) | 0.52 | 7/10 |
 
+Predeclared criterion (the mean over seeds beats the control on timely incidents and yield, for every analyst): **met**.
+
 ## Exploratory holdout continuation
 
 The same online learner continues from August 2010 through 2011-05-16; metrics cover December-May only. Holdout labels enter only as verdicts on admitted cases, as an analyst would provide them. **Exploratory reuse:** the holdout was already evaluated for holdout-unsupervised/result.json, holdout/result.json.

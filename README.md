@@ -18,7 +18,7 @@ python -m sentinelid demo     # one minute, invented organisation, no dataset do
 | --- | --- | --- |
 | Does it reach incidents in time? (frozen November evaluation) | 9 of 11 incidents within 72 hours with 31 investigations; Isolation Forest 2 of 11 | [results.json](results.json) |
 | Does it hold on unseen data? (sealed Dec 2010 – May 2011 holdout) | 20 of 24 incidents and **16 of 18 new insiders**, 158 investigations | [holdout](reports/HOLDOUT.md) |
-| Can it start without labels? | Label-free 28/61 development incidents; with analyst feedback on its own cases, **40/61** (supervised 45.3) | [feedback](reports/FEEDBACK.md) |
+| Can it start without labels? | Label-free 28/61 development incident-folds; with analyst feedback on its own cases, **40/61** (supervised 45.3) | [feedback](reports/FEEDBACK.md) |
 | Does it catch account takeover? | Only through the attacker's own preparation. **The hijacked account itself is never flagged (0 of 6 days)** | [coverage](reports/IDENTITY_COVERAGE.md) |
 | Do takeover-aware features fix that? | No. A +0.7 development gain reversed on the holdout; the signal is too common to win a one-per-day queue | [ledger](reports/BACKTEST-LEDGER.md) |
 
@@ -203,11 +203,11 @@ Source, configuration, saved result summaries and documentation belong in Git. D
 
 - **Synthetic data.** CERT r4.2 is one simulated organisation with scripted insiders; results are benchmark results.
 - **Simulated analyst.** Feedback results use answer-key verdicts (with error rates in the robustness study); analyst effort is not measured, and an investigation stands in for it.
-- **Reused holdout.** The December–May holdout was first used for the supervised evaluation and then four more times for labelled exploratory comparisons.
+- **Reused holdout.** The December–May holdout was first used for the supervised evaluation and then four more times for labelled exploratory comparisons (one of them interrupted; uses are now recorded before any label is read).
 - **Small counts.** 11 November incidents, 61 incident-folds in development, 24 holdout incidents.
 - **One identity at a time.** Per-identity profiling misses the hijacked account in a takeover; see [identity coverage](reports/IDENTITY_COVERAGE.md).
 - **No credential-attack telemetry.** No failed logons, addresses, locations or MFA.
-- **Local prototype.** The dashboard has no authentication. The frozen model never retrains; only an adaptive run uses reviews, and only to re-weight later scores.
+- **Local prototype.** The dashboard has no authentication. It answers only to its own loopback host name (so another site cannot reach it through DNS rebinding) and accepts commands only from its own origin; `--host 0.0.0.0` exposes it to the network and prints a warning. The frozen model never retrains; only an adaptive run uses reviews, and only to re-weight later scores.
 
 Future work is listed in [section 8 of the report](REPORT.md#8-limitations-and-future-work).
 
@@ -273,10 +273,10 @@ This runs separate eight-configuration RF/IF matrices for temporal, peer and rel
 .venv/bin/python -m sentinelid research feedback --app   # real adaptive replay vs the research harness (~30 min)
 ```
 
-Protocols live in `configs/`; pass `--config configs/research-unsupervised.json` for the label-free study, and `research feedback --holdout` for the exploratory feedback continuation.
+Protocols live in `configs/`; pass `--config configs/research-unsupervised.json` for the label-free study, `--config configs/research-ledger-fix.json` for the development check after the exposure fix, and `research feedback --holdout` for the exploratory feedback continuation. Every holdout stage records its use before reading any label, and refuses to run again, even after a crash.
 
 The deployed model reached 16 of 18 insiders who start after December 1 ([holdout](reports/HOLDOUT.md)). No supervised variant beat it in development ([backtest](reports/BACKTEST.md)). The best label-free detector improved on Isolation Forest but stays well below supervised detection ([backtest](reports/BACKTEST-UNSUPERVISED.md), [exploratory holdout](reports/HOLDOUT-UNSUPERVISED.md)). See [research progression](EXPERIMENT_HISTORY.md).
 
-**Account takeover is the blind spot.** In CERT's takeover scenario the attacker logs on as their supervisor. The deployed model reaches these incidents only through the attacker's own preparation; no day on a hijacked account ever passed its gate ([identity coverage](reports/IDENTITY_COVERAGE.md)). Takeover-aware population features, including other identities' logons on one's own computer, did not change that, and their small development gain reversed on the holdout ([ledger backtest](reports/BACKTEST-LEDGER.md), [holdout](reports/HOLDOUT-LEDGER.md)).
+**Account takeover is the blind spot.** In CERT's takeover scenario the attacker logs on as their supervisor. The deployed model reaches these incidents only through the attacker's own preparation; no day on a hijacked account ever passed its gate ([identity coverage](reports/IDENTITY_COVERAGE.md)). Takeover-aware population features, including other identities' logons on one's own computer, did not change that. Their small development gain reversed on the holdout, and disappeared in development once a defect in the exposure history was fixed ([ledger backtest](reports/BACKTEST-LEDGER.md), [holdout](reports/HOLDOUT-LEDGER.md), [fix check](reports/BACKTEST-LEDGER-FIX.md)).
 
-Analyst feedback closes much of the gap without any initial labels. Starting from the label-free detector and learning only from verdicts on the cases it admits, the detector reached 40/61 development incidents against 29 without learning. In an exploratory holdout continuation it reached 16/18 new insiders with half the deployed model's investigations ([feedback](reports/FEEDBACK.md)). The analyst is simulated from the answer key.
+Analyst feedback closes much of the gap without any initial labels. Starting from the label-free detector and learning only from verdicts on the cases it admits, the detector reached 40/61 development incident-folds against 29 without learning. In an exploratory holdout continuation it reached 16/18 new insiders with half the deployed model's investigations ([feedback](reports/FEEDBACK.md)). The analyst is simulated from the answer key.

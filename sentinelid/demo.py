@@ -12,9 +12,11 @@ import csv
 import json
 import os
 import random
+import shutil
 import subprocess
 import sys
 from collections import defaultdict
+from contextlib import closing
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -433,7 +435,7 @@ def summarize(root):
     root = Path(root)
     incidents = json.loads((root / "answers.json").read_text())["incidents"]
     records = {r["event_id"]: (i, r) for i in incidents for r in i["records"]}
-    with sqlite3.connect(root / "data/operations.sqlite") as db:
+    with closing(sqlite3.connect(root / "data/operations.sqlite")) as db:
         cases = [json.loads(p) for (p,) in db.execute("SELECT payload FROM cases")]
     current = timely = 0
     reached = set()
@@ -482,8 +484,8 @@ def run(port=8767, fresh=False, serve=True):
     """Generate, fit, replay and serve the demo; each stage runs against the demo root."""
     root = DEMO_ROOT
     if fresh or not (root / "answers.json").exists():
-        for p in (root / "data/operations.sqlite", root / "data/operations.lock"):
-            p.unlink(missing_ok=True)
+        # Regeneration rewrites config.json, so the old model, replay and results must go too.
+        shutil.rmtree(root, ignore_errors=True)
         print("Generating invented organisation:", generate(root), "events", flush=True)
     env = {**os.environ, "SENTINELID_ROOT": str(root)}
 

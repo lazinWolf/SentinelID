@@ -92,7 +92,7 @@ The main comparison reports priority AP against **current-positive eligible iden
 
 ## Verification and scope
 
-- 33 dataset-free tests passed; lint and compilation passed.
+- The 33 dataset-free tests that existed at the time passed; lint and compilation passed.
 - Five historical score arrays reproduced with maximum absolute error zero. Saved historical admissions and active RF cases reproduced without rewriting their artifacts.
 - All eight native corrected configurations reproduced the maintained queue's cases and decisions exactly. All 16 persisted score arrays and independent case maxima/origin days matched their saved models and checkpoints.
 - All eight ranker scalers matched only their chronological held-out training rows: 62,889 rows with 679 positive-context labels. Final detector fitting used 85,688 rows with 512 positive days. Evaluation labels are absent from the experimental training cache.

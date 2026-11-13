@@ -65,6 +65,9 @@ JOB_WORDS = (
     "linkedin",
 )
 LAG, WINDOW = 7, 28
+# Bump when a feature's meaning changes, so cached feature matrices are rebuilt.
+# 2: exposure is stored on days the exposed owner is silent too (it was recorded as 0).
+VERSION = 2
 
 
 def day_of(text):
@@ -200,14 +203,18 @@ class State:
         return -math.log((self.popularity(domain) + 1) / (len(self.known) + 1))
 
     def visited(self, ordinal, logon):
-        """Record today's logons by other identities against each computer's owner."""
+        """Record today's visits; return every owner exposed within the window to date.
+
+        An owner can be silent today and still exposed by a visit one or two days ago; that
+        value belongs in their history, or later references would read it as zero.
+        """
         for user, pcs in logon.items():
             for pc, n in pcs.items():
                 owner = self.owner.get(pc)
                 if owner not in (None, user):
                     days = self.visits[owner]
                     days[ordinal] = days.get(ordinal, 0) + n
-        return [owner for owner, days in self.visits.items() if ordinal in days]
+        return [owner for owner in self.visits if self.exposure(owner, ordinal)]
 
     def exposure(self, user, ordinal):
         days = self.visits.get(user, {})

@@ -169,24 +169,3 @@ def vector(row, temporal, peer, temporal_on=False, peer_on=False):
         names += PEER
         values += [peer.measurements()[k] for k in PEER]
     return np.asarray(values, dtype=float), names
-
-
-def ranking_vector(detector_score, values, names, temporal, peer, temporal_on, peer_on):
-    fields = [
-        "percentile:usb_change_7",
-        "percentile:copy_change_7",
-        "magnitude:usb_change_7",
-        "magnitude:copy_change_7",
-        "magnitude:after_hours_change_1",
-        "magnitude:external_email_change_1",
-        "timing_novel_share",
-    ]
-    result = [float(detector_score)] + [float(values[names.index(k)]) for k in fields]
-    rank_names = ["detector_score"] + fields
-    if temporal_on:
-        result += [temporal.measurements()[k] for k in TEMPORAL]
-        rank_names += ["temporal:" + k for k in TEMPORAL]
-    if peer_on:
-        result += [peer.measurements()[k] for k in PEER]
-        rank_names += PEER
-    return result, rank_names

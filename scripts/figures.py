@@ -89,7 +89,7 @@ def reach():
     }
     fig, axes = plt.subplots(1, 2, figsize=(12, 3.6), facecolor=SURFACE)
     for ax, data, total, title, sub in (
-        (axes[0], dev, 61, "Development (Aug–Nov 2010)", "Timely incidents of 61, fold mean"),
+        (axes[0], dev, 61, "Development (Aug–Nov 2010)", "Timely incident-folds of 61"),
         (axes[1], holdout, 24, "Sealed holdout (Dec 2010–May 2011)", "Timely incidents of 24"),
     ):
         bars(ax, list(data), list(data.values()), [total] * len(data))

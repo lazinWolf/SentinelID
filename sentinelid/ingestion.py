@@ -104,6 +104,9 @@ def records(root, start=None, end=None, sources=SOURCES):
                 if end and t >= end:
                     break
                 month = t.strftime("%Y-%m")
+                if metadata and month not in metadata:
+                    # A missing snapshot would silently turn every role into "Unknown role".
+                    raise ValueError(f"{root}: no monthly identity snapshot for {month}")
                 person = metadata.get(month, {}).get(row["user"], {})
                 yield Record(
                     kind + ":" + row["id"],

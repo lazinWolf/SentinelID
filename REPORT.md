@@ -119,6 +119,7 @@ There are 33 inputs: 13 signed personal percentiles and 13 change magnitudes (`l
 - **Current-positive yield:** the share of investigations whose triggering day contains a labelled malicious record.
 - **Timely incident:** an incident counts once if any of its labelled records is shown to an analyst within 72 hours of that record. This is not "detected within 72 hours of onset".
 - **Fresh insider:** a holdout incident whose official start is after the holdout begins.
+- **Incident-folds (development only):** each monthly fold is scored on its own, so an incident active in two folds counts in both. The development total of 61 is 43 distinct incidents, 16 of which span folds; the deployed recipe's 45.3 incident-folds are 32–33 distinct incidents. Every development comparison uses the same unit.
 - **Ranking:** average precision (AP) and gate recall on identity-days; these are diagnostics, not the operational result.
 
 ### 5.3 Evaluation periods
@@ -131,7 +132,7 @@ There are 33 inputs: 13 signed personal percentiles and 13 change magnitudes (`l
 | August – November | Development backtest: rolling monthly folds, each refit on all earlier days, 3 seeds |
 | **December 1, 2010 – May 16, 2011** | **Sealed holdout**: 10.19M records, never used for development. All scorers were fitted and frozen before its labels were read. |
 
-Every experiment declared its candidates and its selection rule in a configuration file (`configs/`) before it ran: "most timely incidents, with no more investigations and no lower yield than the control." The holdout was first used to evaluate the supervised selection. Each later use is labelled an **exploratory reuse** in its report; there have been four.
+Every experiment declared its candidates and its selection rule in a configuration file (`configs/`) before it ran: "most timely incidents, with no more investigations and no lower yield than the control." The holdout was first used to evaluate the supervised selection. Each later use is labelled an **exploratory reuse** in its report. There have been four: the label-free detectors, the feedback continuation, a feedback robustness run that loaded the labels and was interrupted before producing a result, and the ledger round. The code now records a use before it reads any holdout label, so an interrupted run can no longer go uncounted. The per-scenario breakdown in Section 6.6 re-measures the already-published holdout run and selects nothing.
 
 ---
 
@@ -148,12 +149,12 @@ Source: `results.json`. The paired actor-cluster bootstrap difference in inciden
 
 ### 6.2 Development backtest: no variant beats the deployed recipe
 
-Seventeen supervised candidates varied features, model family and queue policy ([report](reports/BACKTEST.md)). None beat the deployed recipe's 45.3/61 timely incidents under the rule:
+Seventeen candidates (sixteen supervised, plus an Isolation Forest control) varied features, model family and queue policy ([report](reports/BACKTEST.md)). None beat the deployed recipe's 45.3/61 timely incident-folds under the rule:
 
-- Correcting a known chronology defect in a 3-day target: 44.3.
+- Correcting a known chronology defect in a 3-day target: 44.3. The deployed model keeps the defect (its USB and copy "last 3 days" magnitude reads today plus five and six days ago), because its saved scores must stay reproducible; Section 7 discusses it.
 - Adding peer features: 41.0.
 - HistGradientBoosting: 45.7, but with more investigations.
-- Ranking by persistence, a 3-day cooldown and a 5-day expiry all reduced reach.
+- Ranking by persistence (summing or counting an identity's repeated candidacies), a 3-day cooldown and a 5-day expiry all reduced reach.
 
 **Of 15 development misses, 12 were queue losses** (expiry, cooldown, late admission) rather than scores below the gate. The detector usually ranks the insider high enough; the binding constraint is the budget.
 
@@ -216,7 +217,7 @@ Splitting the deployed model's already-reported results by scenario and account 
 
 *Figure 3. Share of labelled malicious days scoring over the gate, by scenario and account (November and holdout combined).*
 
-The re-measurement reproduces the published totals exactly (31 investigations and 9/11; 158 and 20/24). The finding: **the model sees the insider stages well, and sees the takeover only through the attacker's preparation** (the keylogger download, the USB use and the logon on another person's computer). **No day on a hijacked account ever passed the gate.** This is the expected weakness of personal-baseline profiling. The attacker using the victim's account produces only a short, modest change in the *victim's* history, and nothing in a per-identity model links that change to the attacker.
+The re-measurement reproduces the published totals exactly (31 investigations and 9/11; 158 and 20/24). The finding: **the model sees the insider stages well, and sees the takeover only through the attacker's preparation** (the keylogger download, the USB use and the logon on another person's computer). **No day on a hijacked account ever passed the deployed model's gate.** This is the expected weakness of personal-baseline profiling. The attacker using the victim's account produces only a short, modest change in the *victim's* history, and nothing in a per-identity model links that change to the attacker.
 
 ### 6.7 Takeover-aware features: a predeclared negative result
 
@@ -230,21 +231,23 @@ The final experiment added population context from a one-pass ledger over the ra
 
 All features are causal. Candidates and rule were declared before any result, and the configuration discloses that the ideas came from inspecting development labels.
 
-| Candidate | Development (61 incidents) | Holdout incidents (24) | Holdout fresh insiders (18) |
-| --- | ---: | ---: | ---: |
-| Corrected control | 44.3 | 19.6 | 15.2 |
-| Exposure only | 43.3 | – | – |
-| `ledger_generic` (selected by the rule) | 45.0 | 18.0 | 13.8 |
+| Candidate | Development (61 incident-folds) | Holdout incidents (24) | Holdout fresh insiders (18) | Development, exposure fixed |
+| --- | ---: | ---: | ---: | ---: |
+| Corrected control | 44.3 | 19.6 | 15.2 | 44.3 |
+| Exposure only | 43.3 | – | – | 44.3 |
+| `ledger_generic` (selected by the rule) | 45.0 | 18.0 | 13.8 | 44.3 |
 
-The controls reproduced the earlier backtest exactly, so the new features changed nothing else. The selected candidate's development gain (+0.7, inside the seed range) **reversed on the holdout**, and hijacked-account reach stayed at zero for every candidate. Added to the label-free detector, the ledger features lowered reach from 28 to 23.
+The controls reproduced the earlier backtest exactly, so the new features changed nothing else. The selected candidate's development gain (+0.7, inside the seed range) **reversed on the holdout**, and hijacked-account reach stayed at zero for every candidate. Added to the label-free detector, the ledger features lowered reach from 28 to 23 ([report](reports/BACKTEST-LEDGER-UNSUPERVISED.md)). (Unlike the deployed model, `ledger_generic` and the control each let a hijacked day over their own gate in some seeds, but neither reached an analyst in time.)
 
-The diagnosis is the base rate. Exposure *does* fire on hijacked days: its magnitude is at least 1.0 on 10 of the 15 hijacked development days. It also fires on 2,604 of 114,895 ordinary days, because CERT users often log on to each other's computers. A signal with roughly 0.4% precision cannot win a queue that admits one identity a day, and about 15 labelled days are too few for a forest to learn the combination that would make it specific. Per the stop rule, nothing was retuned after the results.
+**A defect found after the round.** The code review in the final iteration found that the ledger stored an owner's exposure only on days the owner was active or visited that same day; on other days later references read it as zero (12,897 of 63,356 exposed owner-days). After the fix, a development-only rerun of the exposure candidates ([report](reports/BACKTEST-LEDGER-FIX.md), last column) puts every candidate level with the control at 44.3, and none reaches a hijacked-account incident in time. The holdout was not used again. The defect therefore inflated the small development gain rather than hiding a real one, and the negative verdict stands.
+
+The diagnosis is the base rate. Exposure *does* fire on hijacked days. Across all 114,895 development identity-days (June to November), 15 are labelled hijacked-account days. Exposure magnitude is at least 1.0 on 10 of them, but also on 2,604 days overall, because CERT users often log on to each other's computers. A signal with roughly 0.4% precision cannot win a queue that admits one identity a day, and 15 labelled days are too few for a forest to learn the combination that would make it specific (only 8 of them fall in the scored folds). Per the stop rule, nothing was retuned after the results.
 
 ### 6.8 System verification
 
 - The saved replay processed 14,143,645 records and produced 18,772 scores and 31 cases. The research pipeline reproduces the deployed model's November and holdout results exactly.
 - `tests/test_end_to_end.py` runs the real ingestion, features, model, queue and store on the invented demo organisation in CI. It checks cross-source ordering, rejection of inverted sources, retrieval of evidence from the original lines, that every planted November incident reaches a case (the takeover through the attacker's account, as in CERT), and that an interrupted and resumed replay equals an uninterrupted one **bit for bit**. That last check caught a nondeterminism in the demo model's parallel prediction, which is now fixed.
-- **Adaptive application against the research harness** ([report](reports/ADAPTIVE_APP_CHECK.md)). The real application replayed all 14.1M records in adaptive mode over November from a cold start. A simulated analyst saved a review on each case, and the replay read those reviews before the next scored day. It admitted **the same 23 investigations, in the same order, on the same mornings** as the research harness. All 33 inputs agreed on all 18,772 scored identity-days. Scores were close but not identical (largest difference 0.063 against day gates of 7–26). The difference traces to the label-free reference population: on every Monday from June to October, the live feature builder counts one more new host, recipient or domain than the archived research cache, for about 30 identities each. That affects 820 of 96,123 reference rows; November rows match exactly. The cause was not traced further.
+- **Adaptive application against the research harness** ([report](reports/ADAPTIVE_APP_CHECK.md)). The real application replayed all 14.1M records in adaptive mode over November from a cold start. A simulated analyst saved a review on each case, and the replay read those reviews before the next scored day. It admitted **the same 23 investigations, in the same order, on the same mornings** as the research harness. All 33 inputs agreed on all 18,772 scored identity-days. Scores were close but not identical (largest difference 0.063 against day gates of 7–26). The difference traces to the label-free reference population. 820 of its 96,123 rows differ, always in novelty inputs (new hosts, recipients, domains), with the live feature builder counting more than the archived research cache. They fall on the first working day after a break: 16 Mondays from June 14 to October 11 and the Tuesdays after the July 5 and September 6 holidays, about 40 identities each, plus 6 rows on five Sundays. November rows match exactly. The cause, evidently how the two builders bound novelty history across non-working days, was not traced further.
 
 ---
 
@@ -265,7 +268,9 @@ Organised by the pitfalls of Arp et al. [9].
 | P9 Lab-only evaluation | Replay of a fixed dataset; analyst simulated | Evidence and workflow are real, but there is no live deployment and analyst effort was not measured. |
 | P10 Inappropriate threat model | Claiming coverage of attacks the data cannot show | Section 3.3 lists what is untestable; the takeover result is reported as a blind spot. |
 
-**Holdout reuse.** The holdout was used once for selection-independent evaluation, then four more times for exploratory comparisons. Numbers from those later uses are weaker evidence than the first, and a further independent period would be needed for any new claim.
+**Known defect in the deployed model.** The deployed model's 3-day USB and copy magnitudes read today plus five and six days ago instead of today and the two days before (`features.py`, documented in `EXPERIMENTS.md`). The model was fitted, gated and evaluated with that definition, so its reported numbers are internally consistent, but two of its 33 inputs do not mean what their names say. Refitting with the corrected definition was not better: 44.3 against 45.3 incident-folds in development, and 8/11 against 9/11 in November for the refit control. The headline numbers therefore belong to the model as built, not to a defect-free version.
+
+**Holdout reuse.** The holdout was used once for selection-independent evaluation, then four more times for exploratory comparisons (Section 5.3). Numbers from those later uses are weaker evidence than the first, and a further independent period would be needed for any new claim.
 
 ---
 

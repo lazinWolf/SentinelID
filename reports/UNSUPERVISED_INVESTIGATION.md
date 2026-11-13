@@ -6,15 +6,15 @@ Investigation date: October 7, 2026. Project inspected: `/home/dividh/Desktop/op
 
 ## Scope and preservation
 
-The maintained application, `PROJECT_SUMMARY.md`, feature implementation, active model and operational database were inspected. Historical code, fitting artifacts, feature cache and consumed outcomes were extracted from the recovery archive into this temporary directory. Analysis used read-only database connections and copied artifacts; new scripts, arrays and reports were written only here.
+The maintained application, the project summary of the time (since replaced by `REPORT.md`), feature implementation, active model and operational database were inspected. Historical code, fitting artifacts, feature cache and consumed outcomes were extracted from the recovery archive into this temporary directory. Analysis used read-only database connections and copied artifacts; new scripts, arrays and reports were written only here.
 
-[Preservation verification](project-preservation.json) records unchanged SHA-256 hashes for 31 checked files, including project source/configuration, the deployed model, provenance and operational database. No new project source files were created. The protected archive was read, not rewritten. This investigation makes **no project changes**, performs no deployment, and does not re-run the complete original-record replay.
+Preservation verification (`project-preservation.json`, in the scratch workspace) records unchanged SHA-256 hashes for 31 checked files, including project source/configuration, the deployed model, provenance and operational database. No new project source files were created. The protected archive was read, not rewritten. This investigation makes **no project changes**, performs no deployment, and does not re-run the complete original-record replay.
 
 November was already consumed. All new performance measurements below are retrospective diagnostics. The scratch PCA configuration was chosen in the context of known IF weaknesses; no independent validation claim is available.
 
 ## 1. A concrete feature correctness defect
 
-In [the maintained feature builder](/home/dividh/Desktop/openai/prj4/sentinelid/features.py:141), `last7` is ordered as `[d−1, d−2, d−3, d−4, d−5, d−6, d]`. [The magnitude calculation](/home/dividh/Desktop/openai/prj4/sentinelid/features.py:195) slices `last7[-n:]`.
+In the maintained feature builder (`sentinelid/features.py`, the `last7` list in `DailyStream.close`), `last7` is ordered as `[d−1, d−2, d−3, d−4, d−5, d−6, d]`. The magnitude calculation in the same method slices `last7[-n:]`.
 
 For `n=3`, the target therefore contains **today plus five and six days ago**, rather than today plus the preceding two days. One-day and seven-day sums are unaffected by this ordering. The percentile implementation independently uses the intended consecutive three days, so the two PM inputs describing the same nominal horizon disagree. This is not the intentional lag of the personal reference period: the defect concerns the target window.
 
@@ -111,13 +111,7 @@ Unresolved hypotheses include adaptation of references to long-running attacks, 
 ## Reproduction and evidence
 
 - [Main measurements and reproduction assertions](unsupervised-investigation.json)
-- [Event losses by incident](incident-loss-breakdown.json)
-- [Feature-window initial diagnostic](three-day-window-diagnostic.json)
-- [Main scratch analysis script](investigate.py)
-- [Frozen-model input sensitivity script](window_sensitivity.py)
-- [PCA investigation records](exploratory-pca-reviews.json)
-- [Before hashes](project-before.json) and [preservation check](project-preservation.json)
-- [Copied historical report](archive/research/reports/IF_WORKLOAD_IMPROVEMENT.md)
+- Not retained in the repository (scratch workspace only): event losses by incident (`incident-loss-breakdown.json`), the feature-window diagnostic (`three-day-window-diagnostic.json`), the analysis scripts (`investigate.py`, `window_sensitivity.py`), PCA records (`exploratory-pca-reviews.json`), hash checks (`project-before.json`, `project-preservation.json`) and a copied historical report (`IF_WORKLOAD_IMPROVEMENT.md`).
 
 Scripts require the extracted artifacts retained beside them and the project's pinned environment. From the project directory, `.venv/bin/python -B /tmp/sentinelid-unsupervised-audit-z4jbt3dr/investigate.py` reconstructs the main scratch outputs. `window_sensitivity.py` adds the copied-input sensitivity and positive transformed-window checks. These commands write only inside the scratch directory, but overwrite its diagnostic outputs; they do not create a new untouched evaluation.
 

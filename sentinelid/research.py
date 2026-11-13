@@ -172,8 +172,15 @@ def prepare_ledger(root=ROOT):
     """Build the activity ledger once and align its features with the cached vectors."""
     out = prepare(root)
     marker = out / "ledger.json"
-    if marker.exists() and json.loads(marker.read_text())["names"] == ledger.names():
-        return out
+    if marker.exists():
+        saved = json.loads(marker.read_text())
+        period = (saved["ledger"].get("start"), saved["ledger"].get("end"))
+        if (saved["names"], saved.get("version"), period) == (
+            ledger.names(),
+            ledger.VERSION,
+            (LEDGER_START, HOLDOUT_END),
+        ):
+            return out
     source = directory(root) / "ledger"
     built = source / "manifest.json"
     manifest = json.loads(built.read_text()) if built.exists() else {}
@@ -194,6 +201,7 @@ def prepare_ledger(root=ROOT):
         marker,
         {
             "names": ledger.names(),
+            "version": ledger.VERSION,
             "rows": len(days),
             "ledger": manifest,
             "ledger_sha256": digest(source / "ledger.sqlite"),
@@ -731,18 +739,41 @@ def write_report(path, config, summary):
 # Once-only sealed holdout.
 
 
+def holdout_uses(root=ROOT):
+    """Every holdout stage that read labels, finished (result.json) or not (started.json)."""
+    base = directory(root)
+    return sorted(
+        str(p.relative_to(base))
+        for name in ("result.json", "started.json")
+        for p in base.glob("holdout*/" + name)
+        if name == "result.json" or not (p.parent / "result.json").exists()
+    )
+
+
+def check_unsealed(out):
+    """Refuse a holdout stage that has already run, including one interrupted after labels."""
+    for name in ("result.json", "started.json", "freeze.json"):
+        if (out / name).exists():
+            raise ValueError("The sealed holdout was already evaluated: " + str(out / name))
+
+
+def mark_started(out, previous):
+    """Record the use before any holdout label is read, so a crash still counts as a use."""
+    out.mkdir(parents=True, exist_ok=True)
+    save_json(
+        out / "started.json",
+        {"started_at": datetime.now().isoformat(), "previous_holdout_uses": previous},
+    )
+
+
 def holdout(root=ROOT, seeds=(0, 1, 2, 3, 4), output="backtest"):
     """Once per backtest configuration; any configuration after the first is a reuse."""
     stage = "holdout" + output.removeprefix("backtest")
     out = directory(root) / stage
-    result_path = out / "result.json"
-    if result_path.exists():
-        raise ValueError("The sealed holdout was already evaluated: " + str(result_path))
+    check_unsealed(out)
     selection = json.loads((directory(root) / output / "selection.json").read_text())
     config = json.loads((directory(root) / output / "results.json").read_text())["config"]
-    previous = sorted(
-        str(p.relative_to(directory(root))) for p in directory(root).glob("holdout*/result.json")
-    )
+    previous = holdout_uses(root)
     if fingerprint(config) != selection["config_sha256"]:
         raise ValueError("Backtest configuration changed after selection")
     data = Data(root)
@@ -810,6 +841,7 @@ def holdout(root=ROOT, seeds=(0, 1, 2, 3, 4), output="backtest"):
             "frozen_at": datetime.now().isoformat(),
         },
     )
+    mark_started(out, previous)
     events = truth(root / ANSWERS, day_after(HOLDOUT_START, -7), HOLDOUT_END)
     fresh = {t["incident_id"] for t in events.values() if t["official_start"] >= HOLDOUT_START}
     runs = []
@@ -845,7 +877,7 @@ def holdout(root=ROOT, seeds=(0, 1, 2, 3, 4), output="backtest"):
             flush=True,
         )
     save_json(
-        result_path,
+        out / "result.json",
         {
             "runs": runs,
             "holdout": [HOLDOUT_START, HOLDOUT_END],

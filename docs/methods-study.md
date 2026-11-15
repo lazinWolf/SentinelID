@@ -97,11 +97,30 @@ Per method, fold and seed:
 - `reports/METHODS_STUDY.md`: the tables, intervals, coverage, and these expectations checked against what happened.
 - Figures generated from the saved results.
 
-## Declared for a later round (not run here)
+## Round 2: statistical, distribution, distance and linear methods
 
-- **Statistical rules:** per-identity robust z-score (largest absolute value) and largest signed percentile.
-- **Distribution-based:** HBOS and COPOD.
-- **Distance and density:** LOF and k-nearest-neighbour distance, each with 20 neighbours; a one-class SVM with an RBF kernel, trained on a 10,000-row subsample.
-- **Supervised linear:** logistic regression.
+Added after round 1 had run and its results had been read, and before any round 2 method had run. Round 1 above is unchanged. The protocol, measures and reading rules are the same; the definitions below are fixed now. The comparison baseline stays `rf`, and with 17 comparisons in total about one interval in 1.7 could miss 0 by chance.
 
-These use the same protocol, measures and reading rules.
+Distance, margin and linear methods standardise inputs with the training window's mean and standard deviation. Deterministic methods run once; methods that draw a subsample run with seeds 0, 1 and 2.
+
+| Name | Kind | Definition |
+| --- | --- | --- |
+| `zscore` | statistical rule | Raw daily counts in 8 channels (USB, file copies, logons, after-hours logons, external email, message bytes, attachments, web), as log(1 + count). The reference for a channel is the identity's own rows in the previous 28 calendar days. z = (today − median) / max(1.4826 · MAD, 0.1), or 0 with fewer than 7 reference rows. Score: the largest absolute z. This is the only method that does not read feature set `c`. |
+| `pct_max` | statistical rule | The largest of the 13 signed-percentile inputs of `c`. |
+| `hbos` | distribution | Histogram-based outlier score. Per input, 10 equal-width bins over the training range; a bin's density is its count divided by the largest bin's count, floored at 1 / (training rows + 1); values outside the range use the nearest edge bin. Score: sum of −log density. |
+| `copod` | distribution | Copula-based outlier score with tails estimated on the training rows. Per input, the left-tail probability is (training values ≤ x, plus 1) / (n + 1) and the right-tail probability likewise with ≥. Score: the largest of the summed −log left tails, the summed −log right tails, and the sum that takes the left tail where the input's training skewness is negative and the right tail otherwise. |
+| `lof` | density | Local Outlier Factor, 20 neighbours, against a 20,000-row random subsample of the training rows. The gate is taken from the subsample's own factors (each row excluded from its own neighbours). |
+| `knn` | distance | Mean distance to the 20 nearest rows of the same kind of 20,000-row subsample; gate as for `lof`. |
+| `ocsvm` | margin | One-class SVM, RBF kernel, γ = 1 / (inputs × variance), ν = 0.05, fitted on a 10,000-row random subsample of the training rows. Score: the negated decision value. Gate from all training rows. |
+| `logreg` | supervised linear | L2 logistic regression, C = 1, balanced class weights. |
+| `edge_causal` | graph | The `edge` probability, but with counts that hold only strictly earlier days: each day is scored, then added. q(v) = (days(v) + 1) / (edge-days of its type + nodes of its type + 1), so unseen nodes and identities need no ceiling. |
+
+`edge_causal` is a repair, declared because of a round 1 result: `edge` let 14,011 test identity-days over its gate where about 1% (roughly 800) was intended. Its gate comes from training rows whose edges are already inside the frozen graph, so their surprises are in-sample and too low. `edge_causal` scores training and test rows the same out-of-sample way. `edge` stays in the report as run.
+
+Expectations, written before running round 2:
+
+- `zscore` and `pct_max` land at or below the unsupervised detectors (average precision under 0.2).
+- `hbos` and `copod` land near `ecod_top5`, which is the same family.
+- `lof` and `knn` land near `if`; `ocsvm` near `autoencoder`.
+- `logreg` trails `rf` on average precision; whether it matches on reach is open, since `mlp` did.
+- `edge_causal` admits far fewer rows than `edge` and stays well below the behavioural detectors.

@@ -271,7 +271,11 @@ This runs separate eight-configuration RF/IF matrices for temporal, peer and rel
 .venv/bin/python -m sentinelid research ledger     # one raw pass: population-context ledger features
 .venv/bin/python -m sentinelid research coverage   # deployed model's results by scenario and account
 .venv/bin/python -m sentinelid research feedback --app   # real adaptive replay vs the research harness (~30 min)
+.venv/bin/python -m sentinelid research methods    # methods study: every detector family, development folds only
+.venv/bin/python -m sentinelid research methods-report   # paired bootstrap intervals and the study report
 ```
+
+The methods study follows [a specification fixed before it ran](docs/methods-study.md). Its neural, sequence and GraphSAGE models need PyTorch (`pip install -e .[study]`; a CPU build is enough), which nothing else in the project uses. `research methods --only lof,knn` runs or reruns chosen methods and merges them into the saved results.
 
 Protocols live in `configs/`; pass `--config configs/research-unsupervised.json` for the label-free study, `--config configs/research-ledger-fix.json` for the development check after the exposure fix, and `research feedback --holdout` for the exploratory feedback continuation. Every holdout stage records its use before reading any label, and refuses to run again, even after a crash.
 

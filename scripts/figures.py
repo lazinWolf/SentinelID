@@ -159,6 +159,38 @@ def funnel():
     fig.savefig(OUT / "holdout-funnel.png", dpi=160, facecolor=SURFACE)
 
 
+def methods():
+    """Methods study: each method's estimate and 95% bootstrap interval, two measures."""
+    path = RESEARCH / "methods/analysis.json"
+    if not path.exists():
+        return
+    table = json.loads(path.read_text())["methods"]
+    order = sorted(table, key=lambda m: table[m]["average_precision"])
+    labels = [f"{m}  ({table[m]['family']})" for m in order]
+    y = np.arange(len(order))
+    fig, axes = plt.subplots(1, 2, figsize=(12, 0.42 * len(order) + 1.6), facecolor=SURFACE)
+    panels = (
+        ("average_precision", "Average precision", "Mean over folds and seeds; 95% interval"),
+        (
+            "incidents_reached",
+            "Incidents reached within 72 hours",
+            f"Of {json.loads(path.read_text())['incident_folds']} development incident-folds",
+        ),
+    )
+    for ax, (key, title, subtitle) in zip(axes, panels, strict=True):
+        style(ax, title, subtitle)
+        values = [table[m][key] for m in order]
+        low = [table[m][key + "_interval"][0] for m in order]
+        high = [table[m][key + "_interval"][1] for m in order]
+        ax.hlines(y, low, high, color=SERIES, linewidth=2)
+        ax.plot(values, y, "o", color=SERIES, markersize=6)
+        ax.axvline(table["rf"][key], color=MUTED, linewidth=1, linestyle=":")
+        ax.set_yticks(y, labels if ax is axes[0] else [""] * len(order), color=INK)
+        ax.set_xlim(left=0)
+    fig.tight_layout()
+    fig.savefig(OUT / "methods-comparison.png", dpi=160, facecolor=SURFACE)
+
+
 if __name__ == "__main__":
     if not RESEARCH.exists():
         sys.exit("Run the research stages first; data/research is missing.")
@@ -166,4 +198,5 @@ if __name__ == "__main__":
     reach()
     takeover()
     funnel()
+    methods()
     print("Figures written to", OUT)

@@ -35,8 +35,19 @@ def main():
         "research", help="Development backtest and once-only sealed holdout evaluation"
     )
     research.add_argument(
-        "stage", choices=["extract", "ledger", "backtest", "holdout", "feedback", "coverage"]
+        "stage",
+        choices=[
+            "extract",
+            "ledger",
+            "backtest",
+            "holdout",
+            "feedback",
+            "coverage",
+            "methods",
+            "methods-report",
+        ],
     )
+    research.add_argument("--only", help="methods: comma-separated methods to (re)run; default all")
     research.add_argument(
         "--config",
         help="Default: configs/research.json (configs/research-feedback.json for feedback)",
@@ -114,6 +125,14 @@ def main():
                     (feedback.holdout if args.holdout else feedback.run)(config)
             elif args.stage == "coverage":
                 research.identity_coverage()
+            elif args.stage == "methods":
+                from . import methods
+
+                methods.run(only=args.only.split(",") if args.only else None)
+            elif args.stage == "methods-report":
+                from . import methods
+
+                methods.analyse()
             elif args.stage == "backtest":
                 print(
                     json.dumps(

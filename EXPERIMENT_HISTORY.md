@@ -9,7 +9,7 @@ Historical results live here as a record of the project's process. They are **ou
 | Rules R versus supervised S2 | Active identity-hours; August 1–14 | Rules: 4 TP, 12 FP, 132 FN; S2: 10 TP, 37 FP, 126 FN. Both missed all 111 scenario-2 positive hours. | [Original classification report](data/experiments/inputs/history/classification-pipeline.md) |
 | Daily recovery IX28 | October 1–14 | IX28 reached 9/10 incidents with 60 investigations; rules 2/10 with 12; S2 2/10 with 23. Recovery at matched workload was not established. | [Original recovery report](data/experiments/inputs/history/DETECTION_RECOVERY.md) |
 | Frozen November RF / C_IF comparison | Historical v4; November | RF: 31 admissions, 21 current-positive, 23 context-positive, 9/11 timely. IF: 30, 3, 5, 2/11. Formal improvement was not established because RF used one extra admission. | [Original saved results](results.json); [original workload report](data/experiments/inputs/history/IF_WORKLOAD_IMPROVEMENT.md) |
-| October 7 read-only investigation | Consumed v4 fitting/calibration/November | Found material three-day magnitude chronology defect; reproduced five score arrays exactly and verified selected admissions. Historical PCA diagnostic is preserved only as provenance. | [Investigation](reports/UNSUPERVISED_INVESTIGATION.md), [measurements](reports/unsupervised-investigation.json) |
+| October 7 read-only investigation | Consumed v4 fitting/calibration/November | Found material three-day magnitude chronology defect; reproduced five score arrays exactly and verified selected admissions. Historical PCA diagnostic is preserved only as provenance. | [Investigation](reports/history/UNSUPERVISED_INVESTIGATION.md), [measurements](reports/history/unsupervised-investigation.json) |
 
 The local recovery archive preserves implementations and original reports. The experiment command restores the named historical reports beneath `data/experiments/inputs/history/`. Those links work after local archive restoration; the files are not part of the public source repository.
 
@@ -23,7 +23,7 @@ The corrected all-off controls establish the starting point for new RF/IF ablati
 
 The new comparison uses eight configurations per family: temporal persistence/co-occurrence, historical peer measurements and learned relevance priority, independently off/on. Structured outputs retain measurements and evidence. Detector score and priority stay separate through persistence and resume.
 
-See [experiment methodology](EXPERIMENTS.md) and [corrected comparison](reports/EXPERIMENT_COMPARISON.md) for the current milestone. Raw data, models, hashes, chronological blocks and manifests are recorded in its isolated run directory. November remains consumed; deployment is unchanged.
+See [experiment methodology](EXPERIMENTS.md) and [corrected comparison](reports/history/EXPERIMENT_COMPARISON.md) for the current milestone. Raw data, models, hashes, chronological blocks and manifests are recorded in its isolated run directory. November remains consumed; deployment is unchanged.
 
 ### Correction effects, separate from module effects
 
@@ -39,7 +39,7 @@ Completed run: `abcd831c3f4e3171fa84`. All 16 corrected configurations used the 
 
 RF with peers and native ordering was the only cell satisfying the declared **observed retrospective cost criterion**: 30 admissions, 21 current-positive (70%) and 9/11 timely reach, compared with the corrected RF control's 30, 17 (56.7%) and 8/11. Temporal and learned-ranking effects were mixed or negative. No IF variant exceeded its corrected control's 4/11 timely reach. The combined temporal/peer/learned variants reached 7/11 for RF and 3/11 for IF.
 
-No independent validation period is available, so validated improvement remains unestablished and deployment remains unchanged. [Measured findings](reports/EXPERIMENT_FINDINGS.md) describe interactions, gate losses and detector/module disagreements. [Preservation evidence](reports/experiment-preservation.json) records unchanged operational artifacts, exact historical reproduction, native queue equivalence and fresh-process checkpoint verification.
+No independent validation period is available, so validated improvement remains unestablished and deployment remains unchanged. [Measured findings](reports/history/EXPERIMENT_FINDINGS.md) describe interactions, gate losses and detector/module disagreements. [Preservation evidence](reports/history/experiment-preservation.json) records unchanged operational artifacts, exact historical reproduction, native queue equivalence and fresh-process checkpoint verification.
 
 An earlier implementation attempt (run `394f4f5f36e57f7b32b7`) fitted its models and checkpointed all variants, but its first completed queue exposed a NumPy-to-JSON report error. It produced no comparison. The error was fixed and tested before the completed versioned run; no failed or partial result was inserted into the final matrix. The failed run's 730 MB of local state was deleted in October 2026.
 
@@ -91,6 +91,17 @@ The final detection round. It asked whether population context, especially an in
 - **Why exposure fails.** The signal is sensitive but not specific. Across all 114,895 development identity-days (June to November), exposure magnitude at least 1.0 marks 10 of the 15 hijacked-account days, but also 2,604 rows overall, because CERT users often log on to each other's computers. With one investigation a day, a signal with roughly 0.4% precision cannot win the queue, and 15 labelled hijacked days (8 inside the scored folds) are too few for the forest to learn the combination that would make it specific.
 - **Exposure defect, found by the final code review** ([report](reports/BACKTEST-LEDGER-FIX.md)). The ledger stored an owner's exposure only on days the owner was active or visited that day, so 12,897 of 63,356 exposed owner-days entered later references as zero. After the fix (ledger version 2), a development-only rerun of the exposure candidates and the control (`configs/research-ledger-fix.json`) put all four at 44.3, with no hijacked incident reached. The defect inflated the small development gain; the negative verdict stands, and the holdout was not used again.
 - **Stop.** This was declared as the last detection experiment. No thresholds or lexicons were retuned after results. Detecting the hijacked account itself remains future work: it needs a specific signal (for example, linking the victim's case to the attacker's) or data with authentication context.
+
+## Methods study (November 2026)
+
+A descriptive comparison of detector families on the development folds, under the same gate and one-a-day queue ([report](reports/METHODS_STUDY.md), [specification](docs/methods-study.md)). Each round was declared in the specification and committed before it ran; nothing in it is promoted to the application, and the holdout is not used.
+
+- **Round 1** (`f09cf91`): feed-forward networks (MLP, autoencoder), sequence models over each identity's last 14 days (GRU classifier, next-day GRU) and graph models over the identity–computer and identity–domain graph (smoothed edge probability, GraphSAGE), against the Random Forest, Isolation Forest and `ecod_top5`.
+- **Round 2** (`0504970`): statistical rules (robust z-score, largest percentile), distribution (HBOS, COPOD), density and distance (LOF, kNN), margin (one-class SVM), linear (logistic regression), and `edge_causal`, a repair for `edge`'s in-sample gate, which had passed 14,011 rows instead of about 800.
+- **Round 3** (`4f868e5`): a review of every method found implementation weaknesses, which were confirmed on the data before anything was declared. 72% of `zscore`'s top 1% were activity drops; `pct_max`'s gate tied 14% of days; six detectors read two-sided inputs; the networks trained without validation; GraphSAGE could not tell same-degree nodes apart. Eleven refined `_r3` variants ran beside the originals, with a gate guard against ties.
+- **Result.** Only the MLP matches the Random Forest's reach (44.7 against 44.3 of 61). The GRU matches its ranking (AP 0.84) but reaches incidents later (35.3). The linear model and every label-free family are worse, the best being the refined one-class SVM at 31.3. Five of eleven refinements improved their original. None changed its reading against the Random Forest, so the comparison does not rest on weak baselines.
+- **Identity reading.** Across 29 variants, the hijacked account was reached only by `edge` and `edge_causal` (1.0 incident-fold each) and `gru_next` (0.7). These methods look at which computers and domains an identity touches, or at the sequence of its days, and each reaches far fewer insider incidents. They are a lead for linking identities, not a detector.
+- **Expectations.** The report checks each declared expectation against the outcome. Six of fourteen held, two held partly, and six did not.
 
 ## Progression rules
 

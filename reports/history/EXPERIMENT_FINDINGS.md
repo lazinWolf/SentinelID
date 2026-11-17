@@ -2,7 +2,7 @@
 
 The only configuration meeting the predeclared **observed actual-cost criterion** is RF with temporal off, historical peers on and native detector ordering. It admits 30 investigations, of which 21 are current-positive (70%) and 24 contain labelled evidence; timely reach is 9/11. The corrected RF all-off control admits 30, with 17 current-positive (56.7%), 22 context-positive and 8/11 timely reach. This is a retrospective observation in consumed November, not independently validated improvement. The deployed model remains unchanged.
 
-These findings use only the 16 corrected configurations in [the comparison](EXPERIMENT_COMPARISON.md) and [its measurements](experiment-comparison.json). Historical stages and correction effects are separately documented in [research history](../EXPERIMENT_HISTORY.md). No historical configuration contributes to an effect or criterion below.
+These findings use only the 16 corrected configurations in [the comparison](EXPERIMENT_COMPARISON.md) and [its measurements](experiment-comparison.json). Historical stages and correction effects are separately documented in [research history](../../EXPERIMENT_HISTORY.md). No historical configuration contributes to an effect or criterion below.
 
 ## What the modules did
 
@@ -99,6 +99,6 @@ The main comparison reports priority AP against **current-positive eligible iden
 - A shared pass checked 2,236,607 source records, resolved all 77,482 required evidence pointers and reproduced counts for 63 representative real identity-days.
 - 33 of 35 captured files remained byte-identical; the two declared source changes add the experiment CLI and queue sorting extension point. Active database, deployed model, frozen results, configuration, original sources, dashboard and recovery archive are unchanged.
 
-Run identity: `abcd831c3f4e3171fa84`. Exact manifests, models, case evidence, per-event losses, scenarios, delays, set disagreements and preservation audits are under `data/experiments/abcd831c3f4e3171fa84/`. Its `effect-diagnostics.json` contains the set and interaction calculations above. See [reproduction commands](../EXPERIMENTS.md).
+Run identity: `abcd831c3f4e3171fa84`. Exact manifests, models, case evidence, per-event losses, scenarios, delays, set disagreements and preservation audits are under `data/experiments/abcd831c3f4e3171fa84/`. Its `effect-diagnostics.json` contains the set and interaction calculations above. See [reproduction commands](../../EXPERIMENTS.md).
 
 The result supports keeping optional experiments modular and treating peers as a promising conditional RF addition. It does not support deploying all modules, broad algorithm search or a validated improvement claim. No independent period is available in this corpus; deployment remains unchanged.

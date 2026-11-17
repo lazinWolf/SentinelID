@@ -330,8 +330,8 @@ def reports(root, directory, configs, results, manifests):
         "independent_validation": "unavailable",
     }
     save_json(directory / "comparison.json", summary)
-    save_json(root / "reports/experiment-comparison.json", summary)
-    (root / "reports/EXPERIMENT_COMPARISON.md").write_text("\n".join(text))
+    save_json(root / "reports/history/experiment-comparison.json", summary)
+    (root / "reports/history/EXPERIMENT_COMPARISON.md").write_text("\n".join(text))
 
 
 def run(config_path, resume=False, stop_after_days=None, root=ROOT):
@@ -534,7 +534,9 @@ def run(config_path, resume=False, stop_after_days=None, root=ROOT):
             {"status": "completed", "configurations": len(results), "preservation_passed": True},
         )
         print(
-            "Completed corrected comparison:", root / "reports/EXPERIMENT_COMPARISON.md", flush=True
+            "Completed corrected comparison:",
+            root / "reports/history/EXPERIMENT_COMPARISON.md",
+            flush=True,
         )
         return directory
     finally:

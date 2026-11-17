@@ -45,6 +45,7 @@ def main():
             "coverage",
             "methods",
             "methods-report",
+            "findings",
         ],
     )
     research.add_argument("--only", help="methods: comma-separated methods to (re)run; default all")
@@ -133,6 +134,10 @@ def main():
                 from . import methods
 
                 methods.analyse()
+            elif args.stage == "findings":
+                from .reporting import write_findings
+
+                print("Dashboard findings written to", write_findings(), flush=True)
             elif args.stage == "backtest":
                 print(
                     json.dumps(

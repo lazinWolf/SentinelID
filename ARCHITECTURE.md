@@ -57,10 +57,14 @@ Eligibility precedes prediction. Eligible scores below the gate are still stored
 | Persistence | `sentinelid/store.py` | Checkpoints, observations and cases → atomic SQLite state; feedback → versioned reviews |
 | Local service | `sentinelid/server.py` | HTTP queries/commands → replay control, case inspection and review updates |
 | Presentation playback | `sentinelid/presentation.py` | Committed scores + checkpoint decision trace → read-only day frames and pending-state views |
-| Interface | `dashboard/` | Service responses → tables, measurements and original evidence |
+| Interface | `dashboard/` | Service responses → threat model, day replay, cases with signals and evidence, saved findings |
 | Entry point | `sentinelid/__main__.py` | CLI arguments → verification, status, server, replay, demo or research |
 | Demo root | `sentinelid/demo.py` | Seed → invented CERT-layout organisation, demo model and summary |
 | Population ledger | `sentinelid/ledger.py` | Raw HTTP/email/logon → per identity-day aggregates → causal population-context features (research only) |
+| Case signals | `sentinelid/signals.py` | Stored measurements of one identity-day → plain-language departures from its own history, each with an ATT&CK technique (no labels) |
+| Detectors | `sentinelid/detectors.py`, `sentinelid/neural.py` | Training rows → fitted detector → scores; every detector the research compares |
+| Research protocol | `sentinelid/research.py`, `feedback.py`, `methods.py` | Cached vectors + development labels → backtest, sealed holdout, feedback and methods studies |
+| Reporting | `sentinelid/reporting.py` | Saved results → markdown reports and `dashboard/findings.json`, regenerable without refitting |
 
 ### Project root
 
@@ -104,7 +108,7 @@ flowchart LR
     subgraph ACTIVE["Current application"]
         BUNDLE["data/model.joblib and config.json"]
         REPLAY["Original-record replay<br/>score, queue and persist"]
-        SAVED["results.json<br/>saved comparison"]
+        SAVED["results.json, dashboard/findings.json<br/>saved results"]
         DASH["Investigation dashboard"]
         BUNDLE --> REPLAY --> DASH
         SAVED --> DASH

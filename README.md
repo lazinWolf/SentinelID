@@ -1,10 +1,10 @@
 # SentinelID
 
-**Detecting identity misuse from behavior, one investigation a day.**
+**Identity-based attack detection using behavioural analytics: one investigation a day, with the evidence.**
 
 Attacks that use valid credentials, such as an insider stealing data before leaving or an administrator logging on as their supervisor, break no access rule. SentinelID profiles each identity against its own history, scores every identity-day with a Random Forest and gives an analyst **at most one investigation per morning**, with the original log lines as evidence. It is an academic and portfolio research prototype on the synthetic CERT r4.2 insider-threat benchmark, not a production security service.
 
-**[Read the report](REPORT.md)** · [Architecture](ARCHITECTURE.md) · [Research history](EXPERIMENT_HISTORY.md) · [Identity coverage](reports/IDENTITY_COVERAGE.md)
+**[Read the report](REPORT.md)** · [Findings by question](reports/README.md) · [Architecture](ARCHITECTURE.md) · [Research history](EXPERIMENT_HISTORY.md) · [Identity coverage](reports/IDENTITY_COVERAGE.md)
 
 ```bash
 python -m sentinelid demo     # one minute, invented organisation, no dataset download
@@ -21,6 +21,7 @@ python -m sentinelid demo     # one minute, invented organisation, no dataset do
 | Can it start without labels? | Label-free 28/61 development incident-folds; with analyst feedback on its own cases, **40/61** (supervised 45.3) | [feedback](reports/FEEDBACK.md) |
 | Does it catch account takeover? | Only through the attacker's own preparation. **The hijacked account itself is never flagged (0 of 6 days)** | [coverage](reports/IDENTITY_COVERAGE.md) |
 | Do takeover-aware features fix that? | No. A +0.7 development gain reversed on the holdout; the signal is too common to win a one-per-day queue | [ledger](reports/BACKTEST-LEDGER.md) |
+| Does the detector family matter? | Labels and a non-linear model matter most: across 29 detector variants (tree, neural, sequence, graph, distance, distribution, statistical), only the MLP matches the Random Forest's reach, and refining the implementations changed no comparison. No behavioural-profile detector reliably reaches a hijacked account | [methods study](reports/METHODS_STUDY.md) |
 
 ![Timely incident reach by detector](docs/figures/detector-reach.png)
 
@@ -45,7 +46,8 @@ CERT has no failed logons, source addresses, locations or MFA events, so credent
 - Causal daily features from lagged personal history; fixed Random Forest scoring.
 - Budgeted investigation admission with candidate merging, cooldown and expiry.
 - Atomic SQLite checkpoints, immutable cases and versioned analyst reviews.
-- A local dashboard exposing transformed model inputs, historical references and original source evidence.
+- A local dashboard that opens on the identity threat model (three attack chains, ATT&CK techniques, what the model can and cannot see) and ends with the research findings.
+- Each investigation opens with **Why this identity**: plain-language departures from the identity's own history ("first USB use in the reference period", "logged on to a computer not used before"), each with its ATT&CK technique, plus the transformed model inputs, references and original source records.
 - Read-only day playback with play/pause, scrubbing, pending candidates and recorded queue decisions; a presentation mode and tabbed investigation panels.
 - Optional adaptive replay: a label-free detector whose weights are refit from analyst dispositions on admitted cases.
 
@@ -136,7 +138,7 @@ Prefix each command with `.venv/bin/python -m sentinelid`:
 
 `--new` retains earlier runs but makes the new run current in the dashboard. New runs build history from May; scoring starts in November, so initial progress does not immediately produce alerts. For a midterm, use the saved completed demonstration and **Day replay** for a quick walkthrough. Its Reset button changes only the playback position; it does not create a new run or change cases. Pause takes effect between committed batches for operational replay.
 
-The dashboard separates **Pipeline**, **Day replay**, **Investigations** and **Benchmark results**. Presentation mode enlarges text. Day replay reads stored scores and the committed decision trace, showing the same gate, merging, cooldown, expiry and admissions over November plus queue drain. It does not recompute predictions or evaluation, inject synthetic data or write application state. A fresh checkout needs a completed original-event replay before day playback is available.
+The dashboard has five views: **Identity threats** (the threat model), **Pipeline**, **Day replay**, **Investigations** and **Findings** (the four research questions answered from saved results). Views and cases can be linked directly, for example `/#results` or `/#case/<id>`. Presentation mode (key P) enlarges text. Day replay reads stored scores and the committed decision trace, showing the same gate, merging, cooldown, expiry and admissions over November plus queue drain. It does not recompute predictions or evaluation, inject synthetic data or write application state. A fresh checkout needs a completed original-event replay before day playback is available.
 
 One writer owns a database at a time. Resume requires the same configuration identity. Changing `config.json` requires a separate run; it does not validate a new experiment. These commands neither retrain models nor recompute benchmark outcomes.
 
@@ -175,11 +177,14 @@ The saved replay processed **14,143,645 original records**, produced **18,772 sc
 ## Project structure
 
 ```text
-sentinelid/                # Ingestion, features, scoring/queue/replay, store, server, research and CLI
-dashboard/                # HTML, JavaScript and CSS investigation interface
+sentinelid/                # Application, research and CLI; the module map is in sentinelid/__init__.py
+  detectors.py            # Every compared detector in one place
+  signals.py              # Plain-language case reasons with ATT&CK techniques
+  reporting.py            # Reports and dashboard findings regenerated from saved results
+dashboard/                # HTML, JavaScript, CSS and findings.json
 tests/                    # Unit regressions plus one end-to-end run on the invented demo data
 configs/                  # Experiment, backtest and feedback protocols
-reports/                  # Generated experiment, backtest, holdout, feedback and coverage reports
+reports/                  # Generated reports, indexed by question in reports/README.md; history/ holds superseded ones
 REPORT.md                 # Final project report
 docs/figures/             # Report figures and dashboard screenshots
 scripts/figures.py        # Regenerates the report figures from saved results
@@ -273,9 +278,10 @@ This runs separate eight-configuration RF/IF matrices for temporal, peer and rel
 .venv/bin/python -m sentinelid research feedback --app   # real adaptive replay vs the research harness (~30 min)
 .venv/bin/python -m sentinelid research methods    # methods study: every detector family, development folds only
 .venv/bin/python -m sentinelid research methods-report   # paired bootstrap intervals and the study report
+.venv/bin/python -m sentinelid research findings   # dashboard/findings.json from all saved results
 ```
 
-The methods study follows [a specification fixed before it ran](docs/methods-study.md). Its neural, sequence and GraphSAGE models need PyTorch (`pip install -e .[study]`; a CPU build is enough), which nothing else in the project uses. `research methods --only lof,knn` runs or reruns chosen methods and merges them into the saved results.
+The methods study follows [a specification fixed before each of its three rounds ran](docs/methods-study.md); round 3 re-runs refined implementations of eleven methods beside the originals. Its neural, sequence and GraphSAGE models need PyTorch (`pip install -e .[study]`; a CPU build is enough), which nothing else in the project uses. `research methods --only lof,knn` runs or reruns chosen methods and merges them into the saved results.
 
 Protocols live in `configs/`; pass `--config configs/research-unsupervised.json` for the label-free study, `--config configs/research-ledger-fix.json` for the development check after the exposure fix, and `research feedback --holdout` for the exploratory feedback continuation. Every holdout stage records its use before reading any label, and refuses to run again, even after a crash.
 

@@ -438,7 +438,7 @@ def summarize(root):
     with closing(sqlite3.connect(root / "data/operations.sqlite")) as db:
         cases = [json.loads(p) for (p,) in db.execute("SELECT payload FROM cases")]
     current = timely = 0
-    reached = set()
+    reached, first = set(), {}
     for c in cases:
         triggers = set(c.get("trigger_ids", []))
         evidence = {p["event_id"] for p in c.get("evidence_pointers", [])} | triggers
@@ -448,6 +448,8 @@ def summarize(root):
             i, r = records[eid]
             if (decided - datetime.fromisoformat(r["timestamp"])).total_seconds() <= 72 * 3600:
                 reached.add(i["id"])
+                key = (i["id"], r["account"])
+                first[key] = min(first.get(key, decided), decided)
     november = [i for i in incidents if i["start"] >= "2010-11-01"]
     timely = sum(i["id"] in reached for i in november)
     config = json.loads((root / "config.json").read_text())
@@ -477,7 +479,81 @@ def summarize(root):
         },
     }
     (root / "results.json").write_text(json.dumps(results, indent=2))
-    return results["validation"]["frontier"][0]
+    story = []
+    for i in november:
+        accounts = [(i["actor"], "own")] + ([(i["victim"], "hijacked")] if i.get("victim") else [])
+        story.append(
+            {
+                "scenario": i["scenario"],
+                "accounts": [
+                    {
+                        "identity": who,
+                        "role": role,
+                        "reached": (i["id"], who) in first,
+                    }
+                    for who, role in accounts
+                ],
+            }
+        )
+    return {**results["validation"]["frontier"][0], "incidents": story}
+
+
+SCENARIO_NAMES = {
+    "1": "Data theft before leaving",
+    "2": "Job hunting, then theft",
+    "3": "Account takeover",
+}
+
+
+def tell(result, port):
+    """The demo outcome as a short story for the terminal."""
+    lines = [
+        "",
+        "SentinelID demo: an invented 24-person organisation (not CERT data)",
+        "",
+        "Planted November incidents and what one investigation a morning reached:",
+    ]
+    for incident in result["incidents"]:
+        name = SCENARIO_NAMES.get(incident["scenario"], "Scenario " + incident["scenario"])
+        parts = []
+        for a in incident["accounts"]:
+            label = (
+                "attacker's own account"
+                if incident["scenario"] == "3" and a["role"] == "own"
+                else ("hijacked account" if a["role"] == "hijacked" else "own account")
+            )
+            status = "reached within 72 h" if a["reached"] else "not reached"
+            parts.append(f"{a['identity']} ({label}) {status}")
+        mark = (
+            "+"
+            if all(a["reached"] for a in incident["accounts"])
+            else ("~" if any(a["reached"] for a in incident["accounts"]) else "-")
+        )
+        lines.append(f"  {mark} {name:<26} " + "; ".join(parts))
+    lines += [
+        "",
+        f"{result['reviews']} investigations; {result['current_positive_reviews']} had a planted "
+        "record on the day that triggered them.",
+    ]
+    if any(
+        a["role"] == "hijacked" and not a["reached"]
+        for i in result["incidents"]
+        for a in i["accounts"]
+    ):
+        lines.append(
+            "The hijacked account is the blind spot of per-identity profiling, as in CERT: the "
+            "attacker is caught through their own preparation."
+        )
+    lines += [
+        "",
+        f"Dashboard: http://127.0.0.1:{port}/",
+        "  1. Identity threats  the three attack chains and what the model can see",
+        "  2. Day replay        press Play to watch November one morning at a time",
+        "  3. Investigations    open a case: why this identity, and the original records",
+        "Press P for presentation mode, Ctrl+C to stop.",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def run(port=8767, fresh=False, serve=True):
@@ -489,16 +565,31 @@ def run(port=8767, fresh=False, serve=True):
         print("Generating invented organisation:", generate(root), "events", flush=True)
     env = {**os.environ, "SENTINELID_ROOT": str(root)}
 
-    def stage(*args):
-        subprocess.run([sys.executable, "-m", *args], env=env, check=True, cwd=APP)
+    def stage(*args, quiet=False):
+        subprocess.run(
+            [sys.executable, "-m", *args],
+            env=env,
+            check=True,
+            cwd=APP,
+            stdout=subprocess.DEVNULL if quiet else None,
+        )
 
     if not (root / "data/model.joblib").exists():
-        stage("sentinelid.demo", "fit")
+        print("Fitting the demo model on June to October ...", flush=True)
+        stage("sentinelid.demo", "fit", quiet=True)
     if not (root / "data/operations.sqlite").exists():
-        stage("sentinelid", "replay")
-    stage("sentinelid.demo", "summarize")
+        print("Replaying May to November through the real pipeline ...", flush=True)
+        stage("sentinelid", "replay", quiet=True)
+    result = subprocess.run(
+        [sys.executable, "-m", "sentinelid.demo", "summarize"],
+        env=env,
+        check=True,
+        cwd=APP,
+        capture_output=True,
+        text=True,
+    )
+    print(tell(json.loads(result.stdout), port), flush=True)
     if serve:
-        print(f"Dashboard: http://127.0.0.1:{port}/  (Ctrl+C to stop)", flush=True)
         stage("sentinelid", "serve", "--port", str(port))
 
 
@@ -507,6 +598,6 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["fit"]:
         print("Demo model:", json.dumps(fit(target)), flush=True)
     elif sys.argv[1:] == ["summarize"]:
-        print("Demo result:", json.dumps(summarize(target)), flush=True)
+        print(json.dumps(summarize(target)), flush=True)
     else:
         raise SystemExit("usage: python -m sentinelid.demo fit|summarize")

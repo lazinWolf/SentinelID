@@ -51,6 +51,10 @@ class ServerGuardTests(unittest.TestCase):
         self.assertEqual(self.request("POST", "/anything/start"), 404)
         self.assertEqual(self.request("GET", "/../config.json"), 404)
 
+    def test_dashboard_files_are_served(self):
+        for path in ("/", "/workload.js", "/style.css", "/findings.json"):
+            self.assertEqual(self.request("GET", path), 200, path)
+
     def test_negative_length_is_refused(self):
         self.assertEqual(self.request("POST", "/api/review", headers={"Content-Length": "-1"}), 400)
 

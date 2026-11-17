@@ -3,23 +3,51 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SentinelID · Behavioral detection</title>
+  <title>SentinelID · Identity attack detection</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header>
-  <a class="brand" href="/" aria-label="SentinelID home"><span class="brand-mark" aria-hidden="true">S</span><span>SentinelID<small>Behavioral identity analytics</small></span></a>
+  <a class="brand" href="/" aria-label="SentinelID home"><span class="brand-mark" aria-hidden="true">S</span><span>SentinelID<small>Identity attack detection · behavioural analytics</small></span></a>
   <div class="header-actions"><span class="status-pill" id="service-state">Connecting…</span><button class="button" id="present" aria-pressed="false" title="Larger text for presenting · P">Presentation mode</button></div>
 </header>
 <nav class="main-tabs" aria-label="Dashboard sections" role="tablist">
-  <button role="tab" class="nav active" id="tab-pipeline" aria-controls="pipeline-view" aria-selected="true" data-view="pipeline">Pipeline</button>
+  <button role="tab" class="nav active" id="tab-threats" aria-controls="threats-view" aria-selected="true" data-view="threats">Identity threats</button>
+  <button role="tab" class="nav" id="tab-pipeline" aria-controls="pipeline-view" aria-selected="false" tabindex="-1" data-view="pipeline">Pipeline</button>
   <button role="tab" class="nav" id="tab-demo" aria-controls="demo-view" aria-selected="false" tabindex="-1" data-view="demo">Day replay</button>
   <button role="tab" class="nav" id="tab-cases" aria-controls="cases-view" aria-selected="false" tabindex="-1" data-view="cases">Investigations <span id="nav-case-count" class="count-pill">—</span></button>
-  <button role="tab" class="nav" id="tab-results" aria-controls="results-view" aria-selected="false" tabindex="-1" data-view="results">Benchmark results</button>
+  <button role="tab" class="nav" id="tab-results" aria-controls="results-view" aria-selected="false" tabindex="-1" data-view="results">Findings</button>
 </nav>
 <main>
   <p id="error" class="error" role="alert" hidden></p>
-  <section id="pipeline-view" role="tabpanel" aria-labelledby="tab-pipeline">
+  <section id="threats-view" role="tabpanel" aria-labelledby="tab-threats">
+    <div class="page-heading"><div><div class="eyebrow">Identity-based attack detection</div><h1>Valid credentials, unusual behaviour</h1><p class="subtitle">Insiders misusing their own access and attackers using someone else's break no access rule. SentinelID compares each identity with its own history and opens at most one investigation a morning, with the original log lines as evidence.</p></div><span class="tag" id="threats-tag">CERT r4.2 threat model</span></div>
+    <div class="threat-intro">
+      <div class="panel"><span class="eyebrow">The question each morning</span><p class="lead">If a team can open one investigation today, <strong>whose behaviour changed the most against their own past</strong>, and what records show it?</p></div>
+      <div class="panel legend"><span class="eyebrow">Reading the chains</span><ul><li><span class="seen yes">Seen</span>the model's inputs change</li><li><span class="seen partly">Attacker only</span>seen under the attacker's own account</li><li><span class="seen no">Not seen</span>happens, but under a different identity</li><li><span class="seen none">Not logged</span>no record exists in the data</li></ul></div>
+    </div>
+    <div class="chains">
+      <section class="panel chain"><div class="chain-head"><span class="chain-number">1</span><div><h2>Data theft before leaving</h2><small>Insider · own account</small></div></div><ol>
+        <li><span class="seen yes">Seen</span><strong>After-hours logons</strong><small>T1078 Valid Accounts · logon</small></li>
+        <li><span class="seen yes">Seen</span><strong>First USB use, files copied</strong><small>T1052.001 Exfiltration over USB · device, file</small></li>
+        <li><span class="seen yes">Seen</span><strong>Upload to wikileaks.org</strong><small>T1567 Exfiltration over web service · http</small></li>
+      </ol></section>
+      <section class="panel chain"><div class="chain-head"><span class="chain-number">2</span><div><h2>Job hunting, then theft</h2><small>Insider · own account</small></div></div><ol>
+        <li><span class="seen yes">Seen</span><strong>Weeks of job-site browsing</strong><small>Pre-departure indicator · http</small></li>
+        <li><span class="seen yes">Seen</span><strong>Collecting files</strong><small>T1005 Data from local system · file</small></li>
+        <li><span class="seen yes">Seen</span><strong>USB use well above usual</strong><small>T1052.001 Exfiltration over USB · device</small></li>
+      </ol></section>
+      <section class="panel chain takeover"><div class="chain-head"><span class="chain-number">3</span><div><h2>Account takeover</h2><small>Attacker's account, then the victim's</small></div></div><ol>
+        <li><span class="seen partly">Attacker only</span><strong>Keylogger downloaded</strong><small>T1105 Ingress tool transfer · http</small></li>
+        <li><span class="seen partly">Attacker only</span><strong>Carried by USB to the supervisor's computer</strong><small>T1570 Lateral tool transfer · device, logon</small></li>
+        <li><span class="seen none">Not logged</span><strong>Keystrokes captured</strong><small>T1056.001 Keylogging · no log source</small></li>
+        <li><span class="seen no">Not seen</span><strong>Logs on as the supervisor, mass email</strong><small>T1078 stolen credentials · T1534 · the victim's own history</small></li>
+      </ol><p class="note"><strong>The blind spot.</strong> Profiling one identity at a time sees the attacker's preparation, but the misuse lands in the victim's history as a short, modest change that nothing links to the attacker. No hijacked-account day passed the deployed gate.</p></section>
+    </div>
+    <div class="panel outside"><h2>Outside what this data can show</h2><p>CERT has no failed logons, source addresses, locations, device fingerprints or MFA events. Password spraying, credential stuffing, impossible travel and MFA fatigue cannot be tested here, and nothing in this dashboard claims to detect them.</p></div>
+    <div class="walkthrough panel"><div><h2>See it work</h2><p>Replay November one morning at a time, then open a case to see which behaviour changed and the original records behind it.</p></div><div class="action-group"><button class="button primary" data-go="demo">Replay recorded days <span aria-hidden="true">→</span></button><button class="button" data-go="results">What the research found</button></div></div>
+  </section>
+  <section id="pipeline-view" role="tabpanel" aria-labelledby="tab-pipeline" hidden>
     <div class="page-heading"><div><div class="eyebrow">Operational pipeline</div><h1>From activity to investigation</h1><p class="subtitle">Original records, causal behavior, model scores and budgeted decisions.</p></div><span class="tag" id="data-tag">CERT r4.2 · research prototype</span></div>
     <div class="stats" id="run-stats">
       <div class="stat"><span class="stat-label">Original records processed</span><strong id="records-count">—</strong><span class="stat-note">Committed ingestion</span></div>
@@ -61,10 +89,12 @@
     <div class="panel"><div class="toolbar"><input id="search" type="search" aria-label="Search identities" placeholder="Search identity, e.g. EDB0714"><select id="filter" aria-label="Review status"><option value="all">All review statuses</option><option value="new">New</option><option value="in_review">In review</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option></select></div><div id="cases" class="table-wrap"></div><div class="pagination"><span id="page"></span><button id="previous" class="button">Previous</button><button id="next" class="button">Next</button></div></div>
   </section>
   <section id="results-view" role="tabpanel" aria-labelledby="tab-results" hidden>
-    <div class="page-heading"><div><div class="eyebrow">Frozen benchmark · November 2010</div><h1>Saved evaluation results</h1><p class="subtitle">Original research outcomes, separate from the current replay and analyst reviews.</p></div><span class="tag">Previously consumed evaluation</span></div>
-    <div id="result-cards" class="stats"></div><section class="panel"><h2>Operational comparison</h2><div id="results" class="table-wrap"></div><p id="status" class="notice"></p><p class="note">Timely reach requires relevant retained malicious evidence within 72 hours of that record. It is not model accuracy or necessarily detection within 72 hours of incident onset. Admissions approximate investigation cost; analyst effort was not measured.</p><details><summary>Protocol and limitations</summary><dl class="facts"><dt>Final fitting</dt><dd>8 June–14 October 2010</dd><dt>Calibration diagnostics</dt><dd>15–21 October 2010</dd><dt>Scoring period</dt><dd>1–30 November 2010, then queue drain</dd><dt>Feature contract</dt><dd>Frozen behavior-workload-v4</dd><dt>Label access</dt><dd>RF uses historical training labels; IF fitting is unsupervised</dd><dt>Independent validation</dt><dd>Future evaluation is still required</dd></dl><p>The historical three-day USB/copy magnitude target differs from its percentile target. This frozen application retains that contract; corrected optional experiments are saved separately on the experimental branch.</p></details></section>
+    <div class="page-heading"><div><div class="eyebrow">Research findings · CERT r4.2</div><h1>What the evidence says</h1><p class="subtitle">Four questions about identity attacks, each answered from saved benchmark results and traced to a report in the repository.</p></div><span class="tag" id="findings-tag">Saved results, not this replay</span></div>
+    <p id="findings-unavailable" class="notice" hidden></p>
+    <div id="findings" class="findings"></div>
+    <section class="panel"><details><summary id="results-summary">November 2010 frozen evaluation in detail</summary><div id="result-cards" class="stats"></div><div id="results" class="table-wrap"></div><p id="status" class="notice"></p><p class="note">Timely reach requires relevant retained malicious evidence within 72 hours of that record. It is not model accuracy or necessarily detection within 72 hours of incident onset. Admissions approximate investigation cost; analyst effort was not measured.</p><dl class="facts"><dt>Final fitting</dt><dd>8 June–14 October 2010</dd><dt>Calibration diagnostics</dt><dd>15–21 October 2010</dd><dt>Scoring period</dt><dd>1–30 November 2010, then queue drain</dd><dt>Feature contract</dt><dd>Frozen behavior-workload-v4</dd><dt>Label access</dt><dd>RF uses historical training labels; IF fitting is unsupervised</dd></dl><p class="note">The historical three-day USB/copy magnitude target differs from its percentile target. This frozen application retains that contract.</p></details></section>
   </section>
-  <footer><span>SentinelID · academic &amp; development prototype</span><span>Records → identity-days → candidates → investigations</span></footer>
+  <footer><span>SentinelID · identity-based attack detection using behavioural analytics · academic prototype</span><span>Records → identity-days → candidates → investigations</span></footer>
 </main>
 <div class="drawer-backdrop" id="backdrop" hidden></div>
 <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="title" hidden>

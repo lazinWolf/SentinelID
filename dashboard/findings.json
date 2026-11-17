@@ -1,0 +1,165 @@
+{
+  "dataset": "CERT r4.2 insider-threat benchmark (synthetic organisation)",
+  "questions": [
+    {
+      "id": "own",
+      "question": "Does behavioural profiling catch misuse of an identity's own access?",
+      "answer": "Yes. The frozen model reached 16 of 18 insiders it had never seen on a sealed six-month holdout, with one investigation a day.",
+      "evidence": "Strong: sealed holdout, scorers frozen before labels were read",
+      "bars": [
+        {
+          "label": "Random Forest · Nov",
+          "value": 9.0,
+          "total": 11,
+          "note": ""
+        },
+        {
+          "label": "Isolation Forest · Nov",
+          "value": 2.0,
+          "total": 11,
+          "note": ""
+        },
+        {
+          "label": "Random Forest · holdout, new insiders",
+          "value": 16.0,
+          "total": 18,
+          "note": ""
+        },
+        {
+          "label": "Isolation Forest · holdout, new insiders",
+          "value": 7.8,
+          "total": 18,
+          "note": "mean of 5 seeds"
+        }
+      ],
+      "unit": "incidents reached within 72 hours",
+      "sources": [
+        "results.json",
+        "reports/HOLDOUT.md"
+      ]
+    },
+    {
+      "id": "labels",
+      "question": "Can it start without labels?",
+      "answer": "Partly. A label-free rarity detector reaches about half of what the supervised model does; learning from analyst verdicts on its own cases closes most of the gap.",
+      "evidence": "Moderate: development folds, simulated analyst, two settings tried",
+      "bars": [
+        {
+          "label": "Label-free, no learning",
+          "value": 29.0,
+          "total": 61,
+          "note": ""
+        },
+        {
+          "label": "Label-free + analyst feedback",
+          "value": 40.0,
+          "total": 61,
+          "note": ""
+        },
+        {
+          "label": "Supervised Random Forest",
+          "value": 45.3,
+          "total": 61.0,
+          "note": "for scale"
+        }
+      ],
+      "unit": "development incident-folds reached within 72 hours",
+      "sources": [
+        "reports/FEEDBACK.md",
+        "reports/BACKTEST-UNSUPERVISED.md"
+      ]
+    },
+    {
+      "id": "stolen",
+      "question": "Does it catch a hijacked account in use?",
+      "answer": "No. In the takeover scenario it sees the attacker preparing under their own account, but no day on the hijacked account ever passed the gate. Profiling one identity at a time cannot link the victim's change to the attacker.",
+      "evidence": "Descriptive re-measurement of already reported results; small counts",
+      "bars": [
+        {
+          "label": "Attacker's own account · days over gate",
+          "value": 5.0,
+          "total": 6,
+          "note": ""
+        },
+        {
+          "label": "Hijacked account · days over gate",
+          "value": 0.0,
+          "total": 6,
+          "note": ""
+        }
+      ],
+      "unit": "labelled takeover days scoring over the gate (November and holdout)",
+      "note": "Takeover-aware population features did not change this (reports/BACKTEST-LEDGER.md). Of 29 detector variants in the methods study, only edge, edge_causal, gru_next reached a hijacked account at all, each in at most 1 incident-fold.",
+      "sources": [
+        "reports/IDENTITY_COVERAGE.md",
+        "reports/METHODS_STUDY.md"
+      ]
+    },
+    {
+      "id": "methods",
+      "question": "Does the choice of detector matter?",
+      "answer": "Labels and a non-linear model matter most. The Random Forest and a neural network reach the most incidents; a sequence model ranks as well but reaches them later; a linear model and every label-free family land far below. Refining the implementations changed none of these comparisons.",
+      "evidence": "Exploratory: development folds only, paired bootstrap intervals",
+      "bars": [
+        {
+          "label": "Supervised neural",
+          "value": 44.7,
+          "total": 61,
+          "note": "mlp"
+        },
+        {
+          "label": "Supervised tree",
+          "value": 44.3,
+          "total": 61,
+          "note": "rf"
+        },
+        {
+          "label": "Supervised sequence",
+          "value": 37.7,
+          "total": 61,
+          "note": "gru_r3"
+        },
+        {
+          "label": "Unsupervised margin",
+          "value": 31.3,
+          "total": 61,
+          "note": "ocsvm_r3"
+        },
+        {
+          "label": "Unsupervised distance",
+          "value": 28.3,
+          "total": 61,
+          "note": "knn_r3"
+        },
+        {
+          "label": "Unsupervised tail rarity",
+          "value": 28.0,
+          "total": 61,
+          "note": "ecod_top5"
+        },
+        {
+          "label": "Unsupervised distribution",
+          "value": 27.0,
+          "total": 61,
+          "note": "copod"
+        },
+        {
+          "label": "Supervised linear",
+          "value": 26.0,
+          "total": 61,
+          "note": "logreg"
+        },
+        {
+          "label": "Unsupervised neural",
+          "value": 24.7,
+          "total": 61,
+          "note": "autoencoder_r3"
+        }
+      ],
+      "unit": "development incident-folds reached within 72 hours",
+      "sources": [
+        "reports/METHODS_STUDY.md"
+      ]
+    }
+  ]
+}

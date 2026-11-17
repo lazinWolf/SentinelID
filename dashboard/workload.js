@@ -7,8 +7,9 @@ const stamp = value => value ? dayDate(value) + ' · ' + value.slice(11, 16) : '
 const human = value => String(value ?? '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
 const badge = value => `<span class="badge ${esc(value)}">${esc(human(value))}</span>`;
 const scoreCell = score => `<span class="score"><span class="mono">${fixed(score)}</span><span class="score-meter" aria-hidden="true"><i style="width:${Math.min(100, Math.max(0, Number(score) * 100))}%"></i></span></span>`;
-let summary, view = 'pipeline', page = 0, caseId = null, caseData = null, caseTab = 'overview', offset = 0;
+let summary, view = 'threats', page = 0, caseId = null, caseData = null, caseTab = 'overview', offset = 0;
 let exampleId = null, exampleRun = null, lastFocus = null, caseRequest = 0, listRequest = 0;
+let findingsLoaded = false;
 let demo = null, demoTimer = null, demoPlaying = false, demoRequest = 0, demoLoading = false;
 
 async function api(path, data) {
@@ -39,6 +40,8 @@ function switchView(next) {
   });
   if (next === 'demo' && !demo) loadDemo(0);
   if (next === 'cases') loadCases();
+  if (next === 'results') loadFindings();
+  if (location.hash.slice(1) !== next) history.replaceState(null, '', '#' + next);
 }
 function stat(label, value, note) {
   return `<div class="stat"><span class="stat-label">${esc(label)}</span><strong>${esc(value)}</strong><span class="stat-note">${esc(note)}</span></div>`;
@@ -74,6 +77,7 @@ async function refresh() {
     $('pause').disabled = !summary.running;
     if (summary.error || summary.readiness_error) message(Error(summary.error || summary.readiness_error));
     $('data-tag').textContent = summary.demo ? 'Invented demo data · not CERT' : 'CERT r4.2 · research prototype';
+    $('threats-tag').textContent = summary.demo ? 'Demo replays invented data in the same three scenarios' : 'CERT r4.2 threat model';
     renderResults();
     await loadCases();
     if (exampleRun !== run?.id) {
@@ -102,7 +106,33 @@ function renderResults() {
   const rf = rows.find(r => r.selected), other = rows.find(r => r.system === 'C_IF/fit/max_cooldown/1');
   $('result-cards').innerHTML = rf ? stat('RF timely incident reach', `${rf.timely_incidents} / ${rf.incidents_available}`, 'Retained evidence within 72 hours') + stat('RF current-positive yield', rf.reviews ? `${fixed(100 * rf.current_positive_reviews / rf.reviews, 1)}%` : '—', `${rf.current_positive_reviews} of ${rf.reviews} investigations`) + stat('RF actual admissions', num(rf.reviews), 'One daily admission budget') + (other ? stat('IF timely incident reach', `${other.timely_incidents} / ${other.incidents_available}`, `${other.reviews} actual admissions`) : '') : '';
   $('results').innerHTML = table(['System', 'Daily cap', 'Admissions', 'Current-positive', 'Context-positive', 'Timely incidents'], rows.map(r => [r.selected ? '<strong>Random Forest</strong><small>Supervised · selected baseline</small>' : '<strong>Isolation Forest</strong><small>Unsupervised comparator</small>', num(r.capacity), num(r.reviews), num(r.current_positive_reviews), num(r.context_positive_reviews), `${r.timely_incidents} / ${r.incidents_available}`]));
+  $('results-summary').textContent = summary.demo ? 'This demo replay, scored against its own planted incidents' : 'November 2010 frozen evaluation in detail';
   $('status').textContent = summary.demo ? `${summary.demo}. Counts are scored against the demo's own planted incidents.` : summary.verdict ? verdictText(summary.verdict) : 'Saved evaluation results are unavailable.';
+}
+async function loadFindings() {
+  if (findingsLoaded) return;
+  try {
+    const response = await fetch('/findings.json');
+    if (!response.ok) throw Error('Saved findings are unavailable in this checkout.');
+    const data = await response.json();
+    findingsLoaded = true;
+    $('findings').innerHTML = data.questions.map(q => {
+      const bars = q.bars.map(b => {
+        const share = b.total ? Math.max(0, Math.min(100, 100 * b.value / b.total)) : 0;
+        const value = Number.isInteger(b.value) ? b.value : b.value.toFixed(1);
+        return `<div class="bar-row"><span class="bar-label">${esc(b.label)}${b.note ? `<small> · ${esc(b.note)}</small>` : ''}</span><span class="bar-track" aria-hidden="true"><i style="width:${share}%"></i></span><span class="bar-value mono">${esc(value)} / ${esc(b.total)}</span></div>`;
+      }).join('');
+      return `<section class="panel finding finding-${esc(q.id)}"><span class="eyebrow">${esc(q.question)}</span><p class="finding-answer">${esc(q.answer)}</p><div class="bars" role="list" aria-label="${esc(q.unit)}">${bars}</div><small class="bar-unit">${esc(q.unit)}</small>${q.note ? `<p class="note">${esc(q.note)}</p>` : ''}<div class="finding-foot"><span class="tag">${esc(q.evidence)}</span><small>Source: ${q.sources.map(x => `<span class="mono">${esc(x)}</span>`).join(', ')}</small></div></section>`;
+    }).join('');
+    $('findings-unavailable').hidden = true;
+  } catch (error) {
+    $('findings-unavailable').hidden = false;
+    $('findings-unavailable').textContent = error.message;
+  }
+}
+function signalList(signals) {
+  if (!signals?.length) return '<p class="empty">No single behaviour stands out on this day; the score comes from a combination of smaller changes.</p>';
+  return '<ul class="signals">' + signals.map(s => `<li class="signal ${esc(s.strength)}"><span class="signal-dot" aria-hidden="true"></span><div><strong>${esc(s.title)}</strong><small>${esc(s.detail)}</small></div><span class="signal-tags"><span class="tag mono">${esc(s.technique)}</span><small>${esc(s.stage)}</small></span></li>`).join('') + '</ul>';
 }
 async function loadCases() {
   const request = ++listRequest;
@@ -223,7 +253,7 @@ function inputLabel(field) {
 }
 function renderCase() {
   const r = caseData, c = r.case, ev = r.evidence_summary;
-  $('case-content').innerHTML = `<p id="case-error" class="error" role="alert" hidden></p><p class="case-info">${esc(human(r.observations[0]?.role || 'Unknown role'))} · admitted ${esc(stamp(c.decision_time))}${badge(r.review.status)}</p><div class="case-summary"><div><small>Detector score</small><strong>${fixed(c.score)}</strong></div><div><small>${c.detector === 'adaptive_feedback' ? 'Day gate' : 'Frozen gate'}</small><strong>${fixed(c.threshold)}</strong></div><div><small>Original evidence</small><strong>${num(r.evidence_total)}</strong></div><div><small>Scoring days merged</small><strong>${num(c.days.length)}</strong></div></div><div class="case-tabs" role="tablist" aria-label="Investigation panels">${[['overview','Decision'],['measurements','Measurements'],['evidence','Original records'],['review','Review history']].map(([key,label]) => `<button class="nav ${key === caseTab ? 'active' : ''}" role="tab" data-case-tab="${key}" id="case-tab-${key}" aria-controls="case-${key}" aria-selected="${key === caseTab}" tabindex="${key === caseTab ? 0 : -1}">${label}</button>`).join('')}</div><section id="case-overview" role="tabpanel" aria-labelledby="case-tab-overview" ${caseTab !== 'overview' ? 'hidden' : ''}><div class="panel"><h2>Admission record</h2><dl class="facts"><dt>Identity</dt><dd class="mono">${esc(c.identity_id)}</dd><dt>Model / contract</dt><dd>${esc(c.model_version)}<small class="mono"> · ${esc(c.feature_contract)}</small></dd><dt>Decision time</dt><dd>${esc(stamp(c.decision_time))} · dataset time</dd><dt>Score gate</dt><dd>${fixed(c.score)} ≥ ${fixed(c.threshold)}</dd><dt>Queue policy</dt><dd>${esc(human(c.queue_version))} · maximum pending score</dd><dt>Retained evidence</dt><dd>${num(ev.current_records)} triggering records + ${num(ev.context_records)} prior-context records</dd><dt>Reopened case</dt><dd>${c.reopening ? esc(human(c.reopening_reason)) : 'No'}</dd></dl><p class="note">Aggregate evidence supports inspection; exact model-to-event attribution is not computed. A score above the gate is not a confirmed attack.</p></div><div class="panel"><h2>Score history before admission</h2><div class="table-wrap">${table(['Scoring day','Detector score'], c.score_history.map(h => [esc(dayDate(h.day)),scoreCell(h.score)]))}</div><details><summary>Full admission audit</summary><pre>${esc(JSON.stringify({case_id:c.case_id, model_version:c.model_version, feature_contract:c.feature_contract, calibration_version:c.calibration_version, queue_version:c.queue_version, preceding_case:c.preceding_case, new_qualifying_ids:c.new_qualifying_ids, presented_families:c.presented_families},null,2))}</pre></details></div></section><section id="case-measurements" role="tabpanel" aria-labelledby="case-tab-measurements" ${caseTab !== 'measurements' ? 'hidden' : ''}><div class="panel"><div class="measurement-days"><label for="measurement-day">Scoring day</label><select id="measurement-day">${r.observations.map((o,i) => `<option value="${i}" ${o.day === c.priority_day ? 'selected' : ''}>${esc(dayDate(o.day))}</option>`).join('')}</select></div><div id="measurement-content"></div></div></section><section id="case-evidence" role="tabpanel" aria-labelledby="case-tab-evidence" ${caseTab !== 'evidence' ? 'hidden' : ''}><div class="panel"><h2>Original source records</h2><div class="evidence-sources">${Object.entries(ev.sources).map(([source,count]) => `<span class="tag">${esc(source)} · ${num(count)}</span>`).join('')}</div><p class="note">Retrieved from the original CSV by event ID and byte offset. Current scoring records and prior rolling context are labelled separately.</p><div id="evidence-content"></div></div></section><section id="case-review" role="tabpanel" aria-labelledby="case-tab-review" ${caseTab !== 'review' ? 'hidden' : ''}><div class="panel"><h2>Versioned analyst feedback</h2><p class="note">Human dispositions and notes are separate from benchmark truth. Saving creates a real local review version.${c.detector === 'adaptive_feedback' ? ' In this adaptive run, benign, suspicious and confirmed dispositions re-weight the detector from the next scored day.' : ''}</p><div class="review-form"><div class="two-col"><label>Status<select id="reviewstatus">${['new','in_review','resolved','dismissed'].map(x => `<option value="${x}" ${r.review.status === x ? 'selected' : ''}>${esc(human(x))}</option>`).join('')}</select></label><label>Disposition<select id="disposition">${['unreviewed','benign','suspicious','confirmed','needs_context'].map(x => `<option value="${x}" ${r.review.disposition === x ? 'selected' : ''}>${esc(human(x))}</option>`).join('')}</select></label></div><label>Review note<textarea id="note" maxlength="4000">${esc(r.review.note || '')}</textarea></label><button class="button primary" id="save">Save review version</button><p id="saved" class="saved" role="status"></p></div><h2 style="margin-top:24px">Previous versions</h2><div id="review-history">${renderReviewHistory(r.review_history)}</div></div></section>`;
+  $('case-content').innerHTML = `<p id="case-error" class="error" role="alert" hidden></p><p class="case-info">${esc(human(r.observations[0]?.role || 'Unknown role'))} · admitted ${esc(stamp(c.decision_time))}${badge(r.review.status)}</p><div class="case-summary"><div><small>Detector score</small><strong>${fixed(c.score)}</strong></div><div><small>${c.detector === 'adaptive_feedback' ? 'Day gate' : 'Frozen gate'}</small><strong>${fixed(c.threshold)}</strong></div><div><small>Original evidence</small><strong>${num(r.evidence_total)}</strong></div><div><small>Scoring days merged</small><strong>${num(c.days.length)}</strong></div></div><div class="case-tabs" role="tablist" aria-label="Investigation panels">${[['overview','Decision'],['measurements','Measurements'],['evidence','Original records'],['review','Review history']].map(([key,label]) => `<button class="nav ${key === caseTab ? 'active' : ''}" role="tab" data-case-tab="${key}" id="case-tab-${key}" aria-controls="case-${key}" aria-selected="${key === caseTab}" tabindex="${key === caseTab ? 0 : -1}">${label}</button>`).join('')}</div><section id="case-overview" role="tabpanel" aria-labelledby="case-tab-overview" ${caseTab !== 'overview' ? 'hidden' : ''}><div class="panel why"><h2>Why this identity</h2><p class="note" style="margin:0 0 12px">The strongest departures from ${esc(c.identity_id)}'s own 28-day history on ${esc(dayDate(c.priority_day))}, with the ATT&amp;CK technique each maps to. They describe what changed, not how the model weighed it.</p>${signalList(r.signals?.[c.priority_day])}</div><div class="panel"><h2>Admission record</h2><dl class="facts"><dt>Identity</dt><dd class="mono">${esc(c.identity_id)}</dd><dt>Model / contract</dt><dd>${esc(c.model_version)}<small class="mono"> · ${esc(c.feature_contract)}</small></dd><dt>Decision time</dt><dd>${esc(stamp(c.decision_time))} · dataset time</dd><dt>Score gate</dt><dd>${fixed(c.score)} ≥ ${fixed(c.threshold)}</dd><dt>Queue policy</dt><dd>${esc(human(c.queue_version))} · maximum pending score</dd><dt>Retained evidence</dt><dd>${num(ev.current_records)} triggering records + ${num(ev.context_records)} prior-context records</dd><dt>Reopened case</dt><dd>${c.reopening ? esc(human(c.reopening_reason)) : 'No'}</dd></dl><p class="note">Aggregate evidence supports inspection; exact model-to-event attribution is not computed. A score above the gate is not a confirmed attack.</p></div><div class="panel"><h2>Score history before admission</h2><div class="table-wrap">${table(['Scoring day','Detector score'], c.score_history.map(h => [esc(dayDate(h.day)),scoreCell(h.score)]))}</div><details><summary>Full admission audit</summary><pre>${esc(JSON.stringify({case_id:c.case_id, model_version:c.model_version, feature_contract:c.feature_contract, calibration_version:c.calibration_version, queue_version:c.queue_version, preceding_case:c.preceding_case, new_qualifying_ids:c.new_qualifying_ids, presented_families:c.presented_families},null,2))}</pre></details></div></section><section id="case-measurements" role="tabpanel" aria-labelledby="case-tab-measurements" ${caseTab !== 'measurements' ? 'hidden' : ''}><div class="panel"><div class="measurement-days"><label for="measurement-day">Scoring day</label><select id="measurement-day">${r.observations.map((o,i) => `<option value="${i}" ${o.day === c.priority_day ? 'selected' : ''}>${esc(dayDate(o.day))}</option>`).join('')}</select></div><div id="measurement-content"></div></div></section><section id="case-evidence" role="tabpanel" aria-labelledby="case-tab-evidence" ${caseTab !== 'evidence' ? 'hidden' : ''}><div class="panel"><h2>Original source records</h2><div class="evidence-sources">${Object.entries(ev.sources).map(([source,count]) => `<span class="tag">${esc(source)} · ${num(count)}</span>`).join('')}</div><p class="note">Retrieved from the original CSV by event ID and byte offset. Current scoring records and prior rolling context are labelled separately.</p><div id="evidence-content"></div></div></section><section id="case-review" role="tabpanel" aria-labelledby="case-tab-review" ${caseTab !== 'review' ? 'hidden' : ''}><div class="panel"><h2>Versioned analyst feedback</h2><p class="note">Human dispositions and notes are separate from benchmark truth. Saving creates a real local review version.${c.detector === 'adaptive_feedback' ? ' In this adaptive run, benign, suspicious and confirmed dispositions re-weight the detector from the next scored day.' : ''}</p><div class="review-form"><div class="two-col"><label>Status<select id="reviewstatus">${['new','in_review','resolved','dismissed'].map(x => `<option value="${x}" ${r.review.status === x ? 'selected' : ''}>${esc(human(x))}</option>`).join('')}</select></label><label>Disposition<select id="disposition">${['unreviewed','benign','suspicious','confirmed','needs_context'].map(x => `<option value="${x}" ${r.review.disposition === x ? 'selected' : ''}>${esc(human(x))}</option>`).join('')}</select></label></div><label>Review note<textarea id="note" maxlength="4000">${esc(r.review.note || '')}</textarea></label><button class="button primary" id="save">Save review version</button><p id="saved" class="saved" role="status"></p></div><h2 style="margin-top:24px">Previous versions</h2><div id="review-history">${renderReviewHistory(r.review_history)}</div></div></section>`;
   renderMeasurements();
   renderEvidence();
   $('measurement-day').onchange = renderMeasurements;
@@ -327,6 +357,7 @@ $('close').onclick = closeCase;
 $('backdrop').onclick = closeCase;
 $('present').onclick = presentationMode;
 $('open-demo').onclick = () => switchView('demo');
+document.querySelectorAll('[data-go]').forEach(button => { button.onclick = () => switchView(button.dataset.go); });
 $('example-case').onclick = () => { switchView('cases'); openCase(exampleId); };
 $('demo-play').onclick = playDemo;
 $('demo-reset').onclick = () => jumpDemo(0);
@@ -345,4 +376,13 @@ let searchTimer;
 $('search').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { page = 0; loadCases(); },180); };
 $('filter').onchange = () => { page = 0; loadCases(); };
 setInterval(() => { if ($('drawer').hidden && !demoPlaying) refresh(); },5000);
+// Views can be linked directly, e.g. /#results, and the browser's back button follows them.
+// A case can be linked as /#case/<case id>.
+const linked = () => {
+  const v = location.hash.slice(1);
+  if (v.startsWith('case/')) { switchView('cases'); openCase(decodeURIComponent(v.slice(5))); return; }
+  if ($(v + '-view') && v !== view) switchView(v);
+};
+window.addEventListener('hashchange', linked);
+linked();
 refresh();

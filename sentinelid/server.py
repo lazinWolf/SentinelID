@@ -17,6 +17,7 @@ from .pipeline import (
     verify_model,
 )
 from .presentation import RunPresentation
+from .signals import signals
 from .store import WorkloadStore
 
 
@@ -149,10 +150,12 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 )
             if url.path == "/api/case":
-                return self.send(SERVICE.store.detail(get("id"), max(0, int(get("offset", "0")))))
+                result = SERVICE.store.detail(get("id"), max(0, int(get("offset", "0"))))
+                result["signals"] = {o["day"]: signals(o) for o in result["observations"]}
+                return self.send(result)
             if url.path == "/api/demo":
                 return self.send(SERVICE.presentation.snapshot(int(get("step", "0"))))
-            if url.path not in ["/", "/workload.js", "/style.css"]:
+            if url.path not in ["/", "/workload.js", "/style.css", "/findings.json"]:
                 return self.send({"error": "Not found"}, 404)
             p = APP / "dashboard" / ("workload.html" if url.path == "/" else url.path[1:])
             b = p.read_bytes()
@@ -163,6 +166,8 @@ class Handler(BaseHTTPRequestHandler):
                 if url.path == "/"
                 else "application/javascript"
                 if p.suffix == ".js"
+                else "application/json"
+                if p.suffix == ".json"
                 else "text/css",
             )
             self.send_header("Content-Length", str(len(b)))

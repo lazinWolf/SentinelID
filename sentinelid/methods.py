@@ -18,6 +18,7 @@ from sklearn.metrics import roc_auc_score
 from . import research
 from .adaptive import upward
 from .detectors import (
+    MAD_FLOOR,
     Copula,
     EdgeScorer,
     Graph,
@@ -31,6 +32,7 @@ from .detectors import (
     robust_z,
     standardise,
 )
+from .detectors import gate as training_gate
 from .experiment_io import save_json
 from .ingestion import ROOT
 from .reporting import write_methods_report
@@ -126,7 +128,8 @@ class Inputs:
         self.data = data
         self.root = root
         self.x, self.names = data.features("c")
-        self._lags = self._edges = self._zscore = self._causal = None
+        self._lags = self._edges = self._causal = None
+        self._zscore = {}
 
     @property
     def lagged(self):
@@ -143,19 +146,30 @@ class Inputs:
     def development(self):
         return np.flatnonzero(self.data.days < DEVELOPMENT_END)
 
-    @property
-    def zscore(self):
+    def zscores(self, upward=False, floor=MAD_FLOOR):
         """Robust z-score per development row (NaN elsewhere), from raw daily counts."""
-        if self._zscore is None:
+        key = (upward, floor)
+        if key not in self._zscore:
             rows = self.development()
             days, identities = self.data.days[rows], self.data.v["identity"][rows]
             counts = raw_counts(self.root, days, identities)
             scores = np.full(len(self.data.days), np.nan)
             scores[rows] = robust_z(
-                np.log1p(counts), lags(days, identities, window=REFERENCE_DAYS + 1)
+                np.log1p(counts),
+                lags(days, identities, window=REFERENCE_DAYS + 1),
+                upward=upward,
+                floor=floor,
             )
-            self._zscore = scores
-        return self._zscore
+            self._zscore[key] = scores
+        return self._zscore[key]
+
+    @property
+    def zscore(self):
+        return self.zscores()
+
+    @property
+    def zscore_r3(self):
+        return self.zscores(upward=True, floor=0.5)
 
     @property
     def causal(self):
@@ -200,9 +214,12 @@ def _project(kind, upward_inputs=False, supervised=False):
     return run
 
 
-def _graph(f):
+def _graph(f, refined=False):
     graph = Graph(f.inputs.edges, f.start)
-    scorer = EdgeScorer(graph) if f.method == "edge" else SageScorer(graph, f.seed)
+    if f.method == "edge":
+        scorer = EdgeScorer(graph)
+    else:
+        scorer = SageScorer(graph, f.seed, refined=refined)
     days, identities = f.inputs.data.days, f.inputs.data.v["identity"]
     return (
         edge_scores(scorer, f.inputs.edges, days[f.train], identities[f.train]),
@@ -223,6 +240,28 @@ def _pct_max(f):
     return f.x[f.train][:, columns].max(axis=1), f.x[f.test][:, columns].max(axis=1)
 
 
+def _pct_max_r3(f):
+    """Largest signed percentile, ties broken by the largest change magnitude."""
+    names = f.inputs.names
+    pct = [j for j, n in enumerate(names) if n.startswith("percentile:")]
+    mag = [j for j, n in enumerate(names) if n.startswith("magnitude:")]
+
+    def score(x):
+        return 1000.0 * x[:, pct].max(axis=1) + x[:, mag].max(axis=1)
+
+    return score(f.x[f.train]), score(f.x[f.test])
+
+
+def _upward(run):
+    """Round 3: the same detector on upward-only inputs, as `ecod_top5` reads them."""
+
+    def wrapped(f):
+        f.x = upward(f.x, f.inputs.names)
+        return run(f)
+
+    return wrapped
+
+
 def _distribution(model):
     def run(f):
         fitted = model().fit(f.x[f.train])
@@ -231,7 +270,7 @@ def _distribution(model):
     return run
 
 
-def _neural(f):
+def _neural(f, early_stop=False):
     from . import neural
 
     z = neural.Standardizer(f.x[f.train])(f.x)
@@ -246,7 +285,19 @@ def _neural(f):
             return lambda positions: z[rows[positions]]
 
     n = len(f.train)
-    if f.method in ("mlp", "gru"):
+    if f.method in ("mlp", "gru") and early_stop:
+        # Hold out the last 14 calendar days of the training window, in time order.
+        cut = research.day_after(f.start, -14)
+        days = f.inputs.data.days[f.train]
+        fit, held = f.train[days < cut], f.train[days >= cut]
+        scorer = neural.classifier(
+            f.method,
+            maker(fit),
+            f.inputs.data.v["label"][fit],
+            f.seed,
+            validation=(maker(held), f.inputs.data.v["label"][held]),
+        )
+    elif f.method in ("mlp", "gru"):
         scorer = neural.classifier(f.method, maker(f.train), f.y, f.seed)
     elif f.method == "autoencoder":
         scorer = neural.reconstruction(maker(f.train), n, f.seed)
@@ -292,7 +343,36 @@ REGISTRY = {
         lambda f: logistic(standardise(f.x, f.train), f.y, f.train, f.test),
     ),
     "edge_causal": ("unsupervised graph", True, _precomputed("causal")),
+    # Round 3: refined implementations (docs/methods-study.md).
+    "zscore_r3": ("statistical rule", True, _precomputed("zscore_r3")),
+    "pct_max_r3": ("statistical rule", True, _pct_max_r3),
+    "hbos_r3": ("unsupervised distribution", True, _upward(_distribution(Histograms))),
+    "copod_r3": ("unsupervised distribution", True, _upward(_distribution(Copula))),
+    "lof_r3": (
+        "unsupervised density",
+        False,
+        _upward(
+            lambda f: neighbour_scores("lof", standardise(f.x, f.train), f.train, f.test, f.seed)
+        ),
+    ),
+    "knn_r3": (
+        "unsupervised distance",
+        False,
+        _upward(
+            lambda f: neighbour_scores("knn", standardise(f.x, f.train), f.train, f.test, f.seed)
+        ),
+    ),
+    "ocsvm_r3": (
+        "unsupervised margin",
+        False,
+        _upward(lambda f: one_class_svm(standardise(f.x, f.train), f.train, f.test, f.seed)),
+    ),
+    "autoencoder_r3": ("unsupervised neural", False, _upward(_neural)),
+    "mlp_r3": ("supervised neural", False, lambda f: _neural(f, early_stop=True)),
+    "gru_r3": ("supervised sequence", False, lambda f: _neural(f, early_stop=True)),
+    "graphsage_r3": ("unsupervised graph", False, lambda f: _graph(f, refined=True)),
 }
+ROUND3 = {name for name in REGISTRY if name.endswith("_r3")}
 METHODS = tuple(REGISTRY)
 FAMILY = {name: family for name, (family, _, _) in REGISTRY.items()}
 DETERMINISTIC = {name for name, (_, fixed, _) in REGISTRY.items() if fixed}
@@ -306,7 +386,7 @@ def fit_and_score(method, inputs, train, test, seed, start):
     if (y < 0).any():
         raise ValueError("Sealed label in development training")
     fold = SimpleNamespace(
-        method=method,
+        method=method.removesuffix("_r3"),
         inputs=inputs,
         x=inputs.x,
         train=train,
@@ -393,7 +473,7 @@ def run(root=ROOT, only=None):
                 fitted, s = fit_and_score(method, inputs, train, test, seed, start)
                 if not (np.isfinite(fitted).all() and np.isfinite(s).all()):
                     raise ValueError(f"{method} produced non-finite scores")
-                gate = float(np.quantile(fitted, GATE_QUANTILE))
+                gate, guarded = training_gate(fitted, GATE_QUANTILE, guard=method in ROUND3)
                 queue = research.replay(data, test, s, gate, start, end, POLICY, queue_config)
                 metrics, _ = research.measure(data, test, s, gate, queue, truths[start], start, end)
                 events = truths[start]
@@ -403,6 +483,7 @@ def run(root=ROOT, only=None):
                         "seed": seed,
                         "fold": start,
                         "gate": gate,
+                        **({"gate_guard": guarded} if method in ROUND3 else {}),
                         "gate_candidates": metrics["gate_candidates"],
                         "gate_recall": metrics["gate_recall"],
                         "admissions": metrics["admissions"],

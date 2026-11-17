@@ -124,3 +124,34 @@ Expectations, written before running round 2:
 - `lof` and `knn` land near `if`; `ocsvm` near `autoencoder`.
 - `logreg` trails `rf` on average precision; whether it matches on reach is open, since `mlp` did.
 - `edge_causal` admits far fewer rows than `edge` and stays well below the behavioural detectors.
+
+## Round 3: refined implementations
+
+Added after rounds 1 and 2 had run and been read, and before any round 3 method had run. It comes from a code review of every method, which found implementation weaknesses that the round 1–2 results reflect. Rounds 1 and 2 stay in the report exactly as run. Each refinement below is a new method with an `_r3` suffix, so the original and the refined version can be read side by side. The protocol, folds, seeds, queue, measures and reading rules are unchanged, and the baseline stays `rf`. With 17 + 10 = 27 comparisons, about one interval in 1.4 could miss 0 by chance, so single results remain leads.
+
+What the review measured on the development rows, before any round 3 run:
+
+- `zscore`: 72% of the identity-days in its top 1% are activity *drops* (absence, holidays), because it scores |z|. The MAD is 0 for 86–97% of USB, copy, logon and after-hours references, so with a floor of 0.1 in log space a single extra event scores about 7.
+- `pct_max`: the largest signed percentile saturates at 0.5 on about 14% of identity-days. The 0.99 training quantile therefore equals that tied maximum, and every tied day passes the gate (2,699–3,251 a fold against about 200 intended).
+- Six tabular detectors (`hbos`, `copod`, `lof`, `knn`, `ocsvm`, `autoencoder`) read two-sided inputs, so a drop in a signed percentile counts as much as a rise. The project's own label-free result is that only increases carry signal (`ecod_top5` reads upward-only percentiles). The 13 change magnitudes are already one-sided.
+- `mlp` and `gru` train for a fixed 8 epochs with no validation.
+- `graphsage` node inputs are only a type one-hot and the log degree, so nodes with the same degree and neighbourhood are indistinguishable. Its loss also ignores the declared edge weight (days).
+
+Refinements, fixed now:
+
+| Name | Change from the original |
+| --- | --- |
+| `zscore_r3` | Only positive z counts (score: the largest positive z, 0 if none); MAD floor 0.5. |
+| `pct_max_r3` | Ties broken by size: score = 1,000 × largest signed percentile + largest change magnitude. |
+| `hbos_r3`, `copod_r3`, `lof_r3`, `knn_r3`, `ocsvm_r3`, `autoencoder_r3` | Same definition, on the upward-only inputs that `ecod_top5` uses. |
+| `mlp_r3`, `gru_r3` | Early stopping. The last 14 calendar days of each training window are held out in time order; up to 16 epochs; the weights with the best held-out average precision are kept (patience 2); no refit. The gate uses scores on all training rows, as before. |
+| `graphsage_r3` | Each node also gets a free 16-dimensional learned embedding, and each positive edge's loss is weighted by log(1 + days). |
+
+**Gate guard, round 3 only.** If more than 2% of training rows score at or above the 0.99 quantile (twice the intended share), the gate becomes "strictly above" that value. Each run records whether the guard fired.
+
+Expectations, written before running round 3:
+
+- `zscore_r3` and `pct_max_r3` improve on their originals but stay below the unsupervised detectors.
+- The upward-only variants move toward `ecod_top5`: at least four of the six improve their reach.
+- `mlp_r3` and `gru_r3` stay within the interval of `rf`. `gru_r3` keeps its timeliness deficit, because that comes from ranking late days, not from overfitting.
+- `graphsage_r3` improves on `graphsage` but stays well below the behavioural detectors. Hijacked-account reach stays at most 1.

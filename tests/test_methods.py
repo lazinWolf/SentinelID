@@ -138,11 +138,13 @@ class RoundTwoTests(unittest.TestCase):
         class Inputs:
             data = Data()
             x = np.random.default_rng(0).normal(size=(360, 5))
-            names = ["percentile:a", "percentile:b", "c", "d", "e"]
+            names = ["percentile:a", "percentile:b", "magnitude:c", "d", "e"]
 
         Inputs.x[Data.v["label"] == 1] += 3
         train, test = np.arange(300), np.arange(300, 360)
-        for method in ("pct_max", "hbos", "copod", "lof", "knn", "ocsvm", "logreg"):
+        tabular = ("pct_max", "hbos", "copod", "lof", "knn", "ocsvm", "logreg")
+        refined = ("pct_max_r3", "hbos_r3", "copod_r3", "lof_r3", "knn_r3", "ocsvm_r3")
+        for method in tabular + refined:
             fitted, scores = methods.fit_and_score(method, Inputs, train, test, 0, "2010-08-01")
             self.assertEqual(scores.shape, (60,), method)
             self.assertTrue(np.isfinite(fitted).all() and np.isfinite(scores).all(), method)
@@ -151,6 +153,48 @@ class RoundTwoTests(unittest.TestCase):
                 scores[Data.v["label"][test] == 0].mean(),
                 method,
             )
+
+
+class RoundThreeTests(unittest.TestCase):
+    def test_gate_guard_moves_a_tied_gate_above_the_ties(self):
+        fitted = np.r_[np.zeros(860), np.full(140, 0.5)]  # 14% tied at the maximum
+        plain, fired = detectors.gate(fitted, 0.99)
+        self.assertEqual((plain, fired), (0.5, False))
+        guarded, fired = detectors.gate(fitted, 0.99, guard=True)
+        self.assertTrue(fired)
+        self.assertFalse((fitted >= guarded).any())
+        untied = np.arange(1000.0)
+        self.assertEqual(detectors.gate(untied, 0.99, guard=True), (detectors.gate(untied, 0.99)))
+
+    def test_upward_z_ignores_drops(self):
+        days = np.asarray([f"2010-06-{d:02d}" for d in range(1, 11)])
+        who = np.asarray(["A"] * 10)
+        values = np.ones((10, 1))
+        values[8] = 0.0  # a drop
+        values[9] = 3.0  # a rise
+        lagged = methods.lags(days, who, window=methods.REFERENCE_DAYS + 1)
+        both = detectors.robust_z(values, lagged)
+        up = detectors.robust_z(values, lagged, upward=True, floor=0.5)
+        self.assertGreater(both[8], 0)
+        self.assertEqual(up[8], 0.0)
+        self.assertAlmostEqual(up[9], 2.0 / 0.5)
+
+    def test_pct_max_r3_breaks_saturated_ties_by_size(self):
+        class Inputs:
+            names = ["percentile:a", "percentile:b", "magnitude:a", "magnitude:b"]
+            x = np.asarray([[0.5, 0.1, 1.0, 0.0], [0.5, 0.5, 4.0, 2.0], [0.4, 0.0, 9.0, 0.0]])
+
+            class data:  # noqa: N801
+                v = {"label": np.zeros(3, dtype=int)}
+
+        _, scores = methods.fit_and_score("pct_max_r3", Inputs, np.arange(3), np.arange(3), 0, "")
+        self.assertEqual(np.argsort(-scores).tolist(), [1, 0, 2])
+
+    def test_round_three_methods_are_registered_with_their_originals(self):
+        for name in methods.ROUND3:
+            base = name.removesuffix("_r3")
+            self.assertIn(base, methods.REGISTRY)
+            self.assertEqual(methods.FAMILY[name], methods.FAMILY[base])
 
 
 @unittest.skipUnless(HAS_TORCH, "PyTorch is optional")
@@ -193,6 +237,22 @@ class NeuralTests(unittest.TestCase):
             scores = scorer(make, 40)
             self.assertEqual(scores.shape, (40,))
             self.assertTrue(np.isfinite(scores).all())
+
+    def test_early_stopping_keeps_the_best_held_out_weights(self):
+        make = lambda p: self.x[p]  # noqa: E731
+        held = np.arange(1500, 2000)
+        held_make = lambda p: self.x[held][p]  # noqa: E731
+        scorer = self.neural.classifier(
+            "mlp", make, self.y, seed=0, validation=(held_make, self.y[held])
+        )
+        scores = scorer(held_make, len(held))
+        self.assertGreater(average_precision_score(self.y[held], scores), 0.9)
+
+    def test_refined_graphsage_learns_free_embeddings(self):
+        edges = {("2010-06-01", u): [f"pc:{u}", "web:a.com"] for u in ("A", "B", "C")}
+        scorer = detectors.SageScorer(detectors.Graph(edges, "2010-07-01"), seed=0, refined=True)
+        self.assertEqual(scorer.z.shape[0], 3 + 4)
+        self.assertTrue(np.isfinite(scorer.z).all())
 
     def test_graphsage_embeds_every_node(self):
         edges = {("2010-06-01", u): [f"pc:{u}", "web:a.com"] for u in ("A", "B", "C")} | {

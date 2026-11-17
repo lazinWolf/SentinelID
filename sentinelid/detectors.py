@@ -30,6 +30,7 @@ from .adaptive import TailScorer
 TOP_EDGES = 3
 SMOOTHING = 5.0
 MIN_REFERENCE, MAD_FLOOR = 7, 0.1
+GATE_GUARD = 2.0  # round 3: a gate passing more than twice its intended share becomes strict
 NEIGHBOURS, NEIGHBOUR_ROWS, SVM_ROWS, SVM_NU, BINS = 20, 20_000, 10_000, 0.05, 10
 
 
@@ -105,6 +106,18 @@ def score(model, x, weekend=None):
     return model.predict_proba(x)[:, 1]
 
 
+def gate(fitted, quantile, guard=False):
+    """The `quantile` of the training scores; candidates are scores at or above it.
+
+    With `guard`, a gate that ties so many training rows that more than `GATE_GUARD` times the
+    intended share pass is moved just above the tied value. Returns (gate, guard fired).
+    """
+    value = float(np.quantile(fitted, quantile))
+    if guard and np.mean(fitted >= value) > GATE_GUARD * (1 - quantile):
+        return float(np.nextafter(value, np.inf)), True
+    return value, False
+
+
 # ---------------------------------------------------------------------------
 # Methods-study detectors: graph edge surprise.
 
@@ -161,7 +174,8 @@ class EdgeScorer:
 class SageScorer:
     """GraphSAGE link-prediction embeddings; surprise is -log sigmoid(z_u . z_v)."""
 
-    def __init__(self, graph, seed):
+    def __init__(self, graph, seed, refined=False):
+        """`refined` (round 3): a free learned embedding per node and day-weighted edges."""
         from . import neural
 
         index = {name: i for i, name in enumerate(graph.identities + graph.nodes)}
@@ -181,7 +195,17 @@ class SageScorer:
             [index[v] for v in graph.nodes if kind(v) == "pc"],
             [index[v] for v in graph.nodes if kind(v) == "web"],
         ]
-        z = neural.graphsage(features, sources, targets, kinds, pools, seed)
+        weights = np.log1p([graph.days[p] for p in pairs]) if refined else None
+        z = neural.graphsage(
+            features,
+            sources,
+            targets,
+            kinds,
+            pools,
+            seed,
+            free=16 if refined else 0,
+            weights=weights,
+        )
         self.index, self.z = index, z
         logits = (z[sources] * z[targets]).sum(axis=1)
         self.ceiling = float(np.max(np.logaddexp(0, -logits)))
@@ -238,11 +262,12 @@ def causal_edge_scores(edges, top=TOP_EDGES):
 # Methods-study detectors: statistical, distribution, distance, margin and linear.
 
 
-def robust_z(values, lagged):
-    """Largest absolute robust z-score per row against the identity's own earlier rows.
+def robust_z(values, lagged, upward=False, floor=MAD_FLOOR):
+    """Largest robust z-score per row against the identity's own earlier rows.
 
     `lagged[:, :-1]` indexes the reference rows (-1 where the identity has no row that day);
-    the last column is the row itself and is not part of its own reference.
+    the last column is the row itself and is not part of its own reference. By default the
+    score is the largest |z|; with `upward`, only increases count (0 when there are none).
     """
     reference = np.where(
         (lagged[:, :-1] >= 0)[..., None], values[lagged[:, :-1]], np.nan
@@ -252,8 +277,8 @@ def robust_z(values, lagged):
     with np.errstate(all="ignore"):
         median = np.nanmedian(reference[enough], axis=1)
         mad = np.nanmedian(np.abs(reference[enough] - median[:, None, :]), axis=1)
-    z = (values[enough] - median) / np.maximum(1.4826 * mad, MAD_FLOOR)
-    out[enough] = np.abs(z).max(axis=1)
+    z = (values[enough] - median) / np.maximum(1.4826 * mad, floor)
+    out[enough] = np.maximum(z, 0.0).max(axis=1) if upward else np.abs(z).max(axis=1)
     return out
 
 

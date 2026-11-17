@@ -255,6 +255,221 @@ def write_coverage_report(root, result):
 # Methods study.
 
 
+SPEC_COMMITS = {1: "f09cf91", 2: "0504970", 3: "4f868e5"}
+NEAR = 5.0  # incident-folds; how "near" in the expectations is read (chosen when reporting)
+
+
+def methods_round3_lines(t):
+    pairs = [(m.removesuffix("_r3"), m) for m in t if m.endswith("_r3") and m[:-3] in t]
+    if not pairs:
+        return []
+    lines = [
+        "",
+        "## Round 3: refined implementations against the originals",
+        "",
+        "Each refinement is described in the specification. The gate guard fired in "
+        f"{sum(t[m]['gate_guard_runs'] for _, m in pairs)} of "
+        f"{sum(t[m]['runs'] for _, m in pairs)} round 3 runs.",
+        "",
+        "| Original | Refined | Incidents reached | Change | Avg. precision | Change | Over gate |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for base, m in pairs:
+        a, b = t[base], t[m]
+        lines.append(
+            f"| `{base}` | `{m}` | {a['incidents_reached']:.1f} → {b['incidents_reached']:.1f} | "
+            f"{b['incidents_reached'] - a['incidents_reached']:+.1f} | "
+            f"{a['average_precision']:.3f} → {b['average_precision']:.3f} | "
+            f"{b['average_precision'] - a['average_precision']:+.3f} | "
+            f"{a['gate_candidates']:.0f} → {b['gate_candidates']:.0f} |"
+        )
+    better = sum(t[m]["incidents_reached"] > t[base]["incidents_reached"] for base, m in pairs)
+    lines += [
+        "",
+        f"{better} of {len(pairs)} refinements reached more incidents than their original, and "
+        "no refined method changed its reading against `rf`. The comparison between families "
+        "does not depend on these implementation choices.",
+    ]
+    return lines
+
+
+def _both(t, names):
+    """For an expectation that did not name its measure: the reading on each measure."""
+    matched = {
+        m: [
+            label
+            for key, label in (("ap", "average precision"), ("reached", "reach"))
+            if t[m][f"{key}_reading"] == "matches"
+        ]
+        for m in names
+    }
+    if all(len(v) == 2 for v in matched.values()):
+        return True
+    if not any(matched.values()):
+        return False
+    return (
+        "partly: "
+        + "; ".join(f"`{m}` matches on {' and '.join(v) or 'neither'}" for m, v in matched.items())
+        + " (the expectation did not name a measure)"
+    )
+
+
+def _reach(t, m):
+    return t[m]["incidents_reached"]
+
+
+def _near(t, m, others):
+    low = min(_reach(t, o) for o in others) - NEAR
+    high = max(_reach(t, o) for o in others) + NEAR
+    return low <= _reach(t, m) <= high
+
+
+# (round, expectation as declared, check on the analysis table -> bool). Missing methods skip.
+EXPECTATIONS = [
+    (1, "`mlp` matches or trails `rf`", lambda t: t["mlp"]["reached_reading"] != "better"),
+    (
+        1,
+        "`autoencoder` and `gru_next` land near `if` and `ecod_top5`, far below the supervised "
+        "methods",
+        lambda t: all(
+            _near(t, m, ("if", "ecod_top5")) and t[m]["reached_reading"] == "worse"
+            for m in ("autoencoder", "gru_next")
+        ),
+    ),
+    (1, "`gru` matches `rf`", lambda t: _both(t, ("gru",))),
+    (
+        1,
+        "Graph methods rank lower than the behavioural detectors and do not reach the hijacked "
+        "account",
+        lambda t: all(
+            t[m]["average_precision"] < min(t[b]["average_precision"] for b in ("if", "ecod_top5"))
+            and t[m]["takeover_hijacked_reached"] == 0
+            for m in ("edge", "graphsage")
+        ),
+    ),
+    (
+        2,
+        "`zscore` and `pct_max` land at or below the unsupervised detectors (AP under 0.2)",
+        lambda t: all(t[m]["average_precision"] < 0.2 for m in ("zscore", "pct_max")),
+    ),
+    (
+        2,
+        "`hbos` and `copod` land near `ecod_top5`",
+        lambda t: all(_near(t, m, ("ecod_top5",)) for m in ("hbos", "copod")),
+    ),
+    (
+        2,
+        "`lof` and `knn` land near `if`; `ocsvm` near `autoencoder`",
+        lambda t: (
+            _near(t, "lof", ("if",))
+            and _near(t, "knn", ("if",))
+            and _near(t, "ocsvm", ("autoencoder",))
+        ),
+    ),
+    (
+        2,
+        "`logreg` trails `rf` on average precision",
+        lambda t: t["logreg"]["ap_reading"] == "worse",
+    ),
+    (
+        2,
+        "`edge_causal` admits far fewer rows than `edge` and stays well below the behavioural "
+        "detectors",
+        lambda t: (
+            t["edge_causal"]["gate_candidates"] < t["edge"]["gate_candidates"] / 2
+            and _reach(t, "edge_causal") < _reach(t, "if") - NEAR
+        ),
+    ),
+    (
+        3,
+        "`zscore_r3` and `pct_max_r3` improve on their originals but stay below the unsupervised "
+        "detectors",
+        lambda t: all(
+            _reach(t, m + "_r3") > _reach(t, m) and _reach(t, m + "_r3") < _reach(t, "if")
+            for m in ("zscore", "pct_max")
+        ),
+    ),
+    (
+        3,
+        "At least four of the six upward-only variants improve their reach",
+        lambda t: (
+            sum(
+                _reach(t, m + "_r3") > _reach(t, m)
+                for m in ("hbos", "copod", "lof", "knn", "ocsvm", "autoencoder")
+            )
+            >= 4
+        ),
+    ),
+    (
+        3,
+        "`mlp_r3` and `gru_r3` stay within the interval of `rf`",
+        lambda t: _both(t, ("mlp_r3", "gru_r3")),
+    ),
+    (3, "`gru_r3` keeps its reach deficit", lambda t: t["gru_r3"]["reached_reading"] == "worse"),
+    (
+        3,
+        "`graphsage_r3` improves on `graphsage`, stays well below the behavioural detectors, and "
+        "reaches the hijacked account at most once",
+        lambda t: (
+            _reach(t, "graphsage_r3") > _reach(t, "graphsage")
+            and _reach(t, "graphsage_r3") < _reach(t, "if") - NEAR
+            and t["graphsage_r3"]["takeover_hijacked_reached"] <= 1
+        ),
+    ),
+]
+
+
+def methods_expectation_lines(t):
+    lines = [
+        "",
+        "## Expectations against outcomes",
+        "",
+        'Expectations were written into the specification before each round ran. "Near" is read '
+        f"as within {NEAR:.0f} incident-folds of reach; that tolerance was chosen when writing "
+        "this report, not declared.",
+        "",
+        "| Round | Expectation | Held |",
+        "| ---: | --- | --- |",
+    ]
+    for n, text, check in EXPECTATIONS:
+        try:
+            outcome = check(t)
+        except KeyError:
+            continue
+        held = outcome if isinstance(outcome, str) else "yes" if outcome else "**no**"
+        lines.append(f"| {n} | {text} | {held} |")
+    return lines
+
+
+def methods_identity_lines(t):
+    hijacked = {m: r["takeover_hijacked_reached"] for m, r in t.items()}
+    graph = [m for m in t if "graph" in t[m]["family"]]
+    profile = [m for m in t if m not in graph and m != "zscore" and m != "zscore_r3"]
+
+    def named(methods):
+        hits = [m for m in methods if hijacked[m] > 0]
+        return ", ".join(f"`{m}` ({hijacked[m]:.1f})" for m in hits) if hits else "none"
+
+    return [
+        "",
+        "## Identity reading",
+        "",
+        "Hijacked-account incident-folds reached within 72 hours, as a mean over seeds:",
+        "",
+        f"- Methods that score the 33 personal-baseline inputs ({len(profile)} variants): "
+        + named(profile)
+        + ".",
+        f"- Graph methods, which score *which* computers and web domains an identity touches "
+        f"({len(graph)} variants): " + named(graph) + ".",
+        "",
+        "Comparing an identity with its own past almost never reaches the account in use by "
+        "someone else. The few hits come from scoring unfamiliar computer and domain edges, or "
+        "from the next-day sequence model, and each of those methods reaches far fewer insider "
+        "incidents. With this few hijacked incident-folds, it is a lead for linking identities "
+        "(an attacker's logon on another person's computer), not a detector.",
+    ]
+
+
 def write_methods_report(path, result):
     t = result["methods"]
     baseline = result.get("baseline", "rf")
@@ -265,9 +480,13 @@ def write_methods_report(path, result):
         "Development folds August to November 2010 (expanding training window from 2010-06-08), "
         "feature set `c`, gate at the 0.99 quantile of each method's training scores, the maintained "
         "one-a-day queue. Specification, fixed before any result: "
-        "[docs/methods-study.md](../docs/methods-study.md). The holdout is not used. Intervals are "
+        "[docs/methods-study.md](../docs/methods-study.md), declared in commits "
+        + ", ".join(f"`{c}` (round {n})" for n, c in SPEC_COMMITS.items())
+        + ", each before its round ran. The holdout is not used. Intervals are "
         "95% paired bootstrap intervals (incident-folds for reach, test days for average precision); "
         f"the baseline is `{baseline}`.",
+        "",
+        "![Methods compared](../docs/figures/methods-comparison.png)",
         "",
         f"## Ranking and reach ({result['incident_folds']} incident-folds)",
         "",
@@ -350,6 +569,9 @@ def write_methods_report(path, result):
                 else f"0/{c['incidents']}"
             )
         lines.append(f"| `{m}` | " + " | ".join(cells) + " |")
+    lines += methods_round3_lines(t)
+    lines += methods_expectation_lines(t)
+    lines += methods_identity_lines(t)
     lines += [
         "",
         "Reading rule (fixed in the specification): a method matches the baseline when the interval "
@@ -359,3 +581,160 @@ def write_methods_report(path, result):
         "",
     ]
     path.write_text("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
+# Findings for the dashboard: one summary per identity question, from saved results.
+
+
+def _bar(label, value, total, note=""):
+    return {"label": label, "value": round(float(value), 1), "total": total, "note": note}
+
+
+def findings(root=ROOT):
+    """The project's answers to its four identity questions, each traced to a saved result."""
+    base = directory(root)
+
+    def load(path):
+        return json.loads((base / path).read_text())
+
+    frontier = json.loads((root / "results.json").read_text())["validation"]["frontier"]
+    rf = next(r for r in frontier if r["selected"])
+    iso = next(r for r in frontier if not r["selected"])
+    holdout = load("holdout/result.json")["runs"]
+    deployed = next(r for r in holdout if r["name"].startswith("deployed"))
+    unsupervised = load("holdout-unsupervised/result.json")["runs"]
+
+    def fresh(name):
+        runs = [r for r in unsupervised if r["name"] == name]
+        return float(np.mean([r["timely_fresh_incidents"] for r in runs]))
+
+    feedback = load("feedback/results.json")["variants"]
+    supervised = load("backtest/results.json")["summary"]["candidates"]["deployed_recipe"]
+    coverage = load("identity-coverage.json")["periods"]
+
+    def takeover(kind):
+        days = sum(p["role_coverage"]["3"][kind]["identity_days"] for p in coverage.values())
+        over = sum(p["role_coverage"]["3"][kind]["gate_days"] for p in coverage.values())
+        return over, days
+
+    attacker, hijacked = takeover("own"), takeover("hijacked")
+    methods = load("methods/analysis.json")
+    table = methods["methods"]
+    best = {}
+    for m, r in table.items():  # the best variant of each family, refined or not
+        if (
+            r["family"] not in best
+            or r["incidents_reached"] > best[r["family"]][1]["incidents_reached"]
+        ):
+            best[r["family"]] = (m, r)
+    ranked = sorted(best.values(), key=lambda kv: -kv[1]["incidents_reached"])
+    any_hijacked = sorted(
+        (m for m, r in table.items() if r["takeover_hijacked_reached"] > 0),
+        key=lambda m: -table[m]["takeover_hijacked_reached"],
+    )
+    units = methods["incident_folds"]
+    return {
+        "dataset": "CERT r4.2 insider-threat benchmark (synthetic organisation)",
+        "questions": [
+            {
+                "id": "own",
+                "question": "Does behavioural profiling catch misuse of an identity's own access?",
+                "answer": f"Yes. The frozen model reached {deployed['timely_fresh_incidents']} of "
+                f"{deployed['fresh_incidents_available']} insiders it had never seen on a sealed "
+                "six-month holdout, with one investigation a day.",
+                "evidence": "Strong: sealed holdout, scorers frozen before labels were read",
+                "bars": [
+                    _bar("Random Forest · Nov", rf["timely_incidents"], rf["incidents_available"]),
+                    _bar(
+                        "Isolation Forest · Nov",
+                        iso["timely_incidents"],
+                        iso["incidents_available"],
+                    ),
+                    _bar(
+                        "Random Forest · holdout, new insiders",
+                        deployed["timely_fresh_incidents"],
+                        deployed["fresh_incidents_available"],
+                    ),
+                    _bar(
+                        "Isolation Forest · holdout, new insiders",
+                        fresh("if"),
+                        deployed["fresh_incidents_available"],
+                        "mean of 5 seeds",
+                    ),
+                ],
+                "unit": "incidents reached within 72 hours",
+                "sources": ["results.json", "reports/HOLDOUT.md"],
+            },
+            {
+                "id": "labels",
+                "question": "Can it start without labels?",
+                "answer": "Partly. A label-free rarity detector reaches about half of what the "
+                "supervised model does; learning from analyst verdicts on its own cases closes "
+                "most of the gap.",
+                "evidence": "Moderate: development folds, simulated analyst, two settings tried",
+                "bars": [
+                    _bar(
+                        "Label-free, no learning",
+                        feedback["none"]["totals"]["timely_incidents"],
+                        feedback["none"]["totals"]["incidents_available"],
+                    ),
+                    _bar(
+                        "Label-free + analyst feedback",
+                        feedback["lambda_0.3"]["totals"]["timely_incidents"],
+                        feedback["lambda_0.3"]["totals"]["incidents_available"],
+                    ),
+                    _bar(
+                        "Supervised Random Forest",
+                        supervised["timely_incidents"]["mean"],
+                        supervised["incidents_available"],
+                        "for scale",
+                    ),
+                ],
+                "unit": "development incident-folds reached within 72 hours",
+                "sources": ["reports/FEEDBACK.md", "reports/BACKTEST-UNSUPERVISED.md"],
+            },
+            {
+                "id": "stolen",
+                "question": "Does it catch a hijacked account in use?",
+                "answer": "No. In the takeover scenario it sees the attacker preparing under their "
+                "own account, but no day on the hijacked account ever passed the gate. Profiling "
+                "one identity at a time cannot link the victim's change to the attacker.",
+                "evidence": "Descriptive re-measurement of already reported results; small counts",
+                "bars": [
+                    _bar("Attacker's own account · days over gate", *attacker),
+                    _bar("Hijacked account · days over gate", *hijacked),
+                ],
+                "unit": "labelled takeover days scoring over the gate (November and holdout)",
+                "note": "Takeover-aware population features did not change this "
+                "(reports/BACKTEST-LEDGER.md). Of "
+                f"{len(table)} detector variants in the methods study, only "
+                + (", ".join(any_hijacked) or "none")
+                + " reached a hijacked account at all, each in at most "
+                + f"{max(r['takeover_hijacked_reached'] for r in table.values()):.0f} "
+                + "incident-fold.",
+                "sources": ["reports/IDENTITY_COVERAGE.md", "reports/METHODS_STUDY.md"],
+            },
+            {
+                "id": "methods",
+                "question": "Does the choice of detector matter?",
+                "answer": "Labels and a non-linear model matter most. The Random Forest and a "
+                "neural network reach the most incidents; a sequence model ranks as well but "
+                "reaches them later; a linear model and every label-free family land far below. "
+                "Refining the implementations changed none of these comparisons.",
+                "evidence": "Exploratory: development folds only, paired bootstrap intervals",
+                "bars": [
+                    _bar(r["family"].capitalize(), r["incidents_reached"], units, m)
+                    for m, r in ranked[:9]
+                ],
+                "unit": "development incident-folds reached within 72 hours",
+                "sources": ["reports/METHODS_STUDY.md"],
+            },
+        ],
+    }
+
+
+def write_findings(root=ROOT):
+    path = root / "dashboard/findings.json"
+    path.write_text(json.dumps(findings(root), indent=2, ensure_ascii=False) + "\n")
+    return path

@@ -166,7 +166,7 @@ def methods():
         return
     table = json.loads(path.read_text())["methods"]
     order = sorted(table, key=lambda m: table[m]["average_precision"])
-    labels = [f"{m}  ({table[m]['family']})" for m in order]
+    labels = [f"{m}  ({table[m]['family']})" for m in order]  # hollow marker: round 3
     y = np.arange(len(order))
     fig, axes = plt.subplots(1, 2, figsize=(12, 0.42 * len(order) + 1.6), facecolor=SURFACE)
     panels = (
@@ -179,15 +179,34 @@ def methods():
     )
     for ax, (key, title, subtitle) in zip(axes, panels, strict=True):
         style(ax, title, subtitle)
+        ax.set_title(title, loc="left", fontsize=13, color=INK, fontweight="bold", pad=34)
         values = [table[m][key] for m in order]
         low = [table[m][key + "_interval"][0] for m in order]
         high = [table[m][key + "_interval"][1] for m in order]
         ax.hlines(y, low, high, color=SERIES, linewidth=2)
-        ax.plot(values, y, "o", color=SERIES, markersize=6)
+        refined = np.asarray([m.endswith("_r3") for m in order])
+        ax.plot(np.asarray(values)[~refined], y[~refined], "o", color=SERIES, markersize=6)
+        # Round 3 refinements: hollow markers, so each sits visibly beside its original.
+        ax.plot(
+            np.asarray(values)[refined],
+            y[refined],
+            "o",
+            markerfacecolor=SURFACE,
+            markeredgecolor=SERIES,
+            markeredgewidth=1.6,
+            markersize=6,
+        )
         ax.axvline(table["rf"][key], color=MUTED, linewidth=1, linestyle=":")
         ax.set_yticks(y, labels if ax is axes[0] else [""] * len(order), color=INK)
         ax.set_xlim(left=0)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.02, 1, 1))
+    fig.text(
+        0.01,
+        0.005,
+        "Hollow markers: round 3 refined implementations. Dotted line: rf.",
+        fontsize=9.5,
+        color=MUTED,
+    )
     fig.savefig(OUT / "methods-comparison.png", dpi=160, facecolor=SURFACE)
 
 

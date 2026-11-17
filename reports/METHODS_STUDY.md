@@ -1,14 +1,16 @@
 # Methods study: detection methods compared
 
-Development folds August to November 2010 (expanding training window from 2010-06-08), feature set `c`, gate at the 0.99 quantile of each method's training scores, the maintained one-a-day queue. Specification, fixed before any result: [docs/methods-study.md](../docs/methods-study.md). The holdout is not used. Intervals are 95% paired bootstrap intervals (incident-folds for reach, test days for average precision); the baseline is `rf`.
+Development folds August to November 2010 (expanding training window from 2010-06-08), feature set `c`, gate at the 0.99 quantile of each method's training scores, the maintained one-a-day queue. Specification, fixed before any result: [docs/methods-study.md](../docs/methods-study.md), declared in commits `f09cf91` (round 1), `0504970` (round 2), `4f868e5` (round 3), each before its round ran. The holdout is not used. Intervals are 95% paired bootstrap intervals (incident-folds for reach, test days for average precision); the baseline is `rf`.
+
+![Methods compared](../docs/figures/methods-comparison.png)
 
 ## Ranking and reach (61 incident-folds)
 
 | Method | Family | Avg. precision [95%] | vs RF [95%] | ROC-AUC | Incidents reached [95%] | vs RF [95%] |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | `rf` | supervised tree | 0.832 [0.799, 0.862] | — | 0.990 | 44.3 [38.3, 50.0] | — |
-| `if` | unsupervised | 0.129 [0.107, 0.163] | -0.703 [-0.734, -0.659] worse | 0.937 | 22.3 [15.7, 29.3] | -22.0 [-30.3, -13.0] worse |
-| `ecod_top5` | unsupervised | 0.176 [0.149, 0.219] | -0.656 [-0.687, -0.610] worse | 0.953 | 28.0 [21.0, 35.0] | -16.3 [-25.7, -7.7] worse |
+| `if` | unsupervised isolation | 0.129 [0.107, 0.163] | -0.703 [-0.734, -0.659] worse | 0.937 | 22.3 [15.7, 29.3] | -22.0 [-30.3, -13.0] worse |
+| `ecod_top5` | unsupervised tail rarity | 0.176 [0.149, 0.219] | -0.656 [-0.687, -0.610] worse | 0.953 | 28.0 [21.0, 35.0] | -16.3 [-25.7, -7.7] worse |
 | `mlp` | supervised neural | 0.770 [0.732, 0.804] | -0.062 [-0.082, -0.043] worse | 0.970 | 44.7 [38.3, 50.7] | +0.3 [-4.7, +5.7] matches |
 | `autoencoder` | unsupervised neural | 0.181 [0.159, 0.218] | -0.650 [-0.682, -0.608] worse | 0.957 | 21.3 [15.3, 28.0] | -23.0 [-30.3, -15.0] worse |
 | `gru` | supervised sequence | 0.840 [0.812, 0.866] | +0.008 [-0.023, +0.041] matches | 0.992 | 35.3 [28.7, 42.0] | -9.0 [-15.0, -3.7] worse |
@@ -24,6 +26,17 @@ Development folds August to November 2010 (expanding training window from 2010-0
 | `ocsvm` | unsupervised margin | 0.246 [0.216, 0.291] | -0.586 [-0.622, -0.540] worse | 0.962 | 30.0 [23.0, 37.0] | -14.3 [-22.3, -6.7] worse |
 | `logreg` | supervised linear | 0.202 [0.175, 0.245] | -0.629 [-0.658, -0.590] worse | 0.921 | 26.0 [19.0, 34.0] | -18.3 [-25.7, -11.0] worse |
 | `edge_causal` | unsupervised graph | 0.023 [0.016, 0.036] | -0.808 [-0.840, -0.770] worse | 0.647 | 9.0 [4.0, 15.0] | -35.3 [-43.0, -27.3] worse |
+| `zscore_r3` | statistical rule | 0.014 [0.013, 0.017] | -0.817 [-0.847, -0.785] worse | 0.736 | 2.0 [0.0, 5.0] | -42.3 [-48.3, -35.7] worse |
+| `pct_max_r3` | statistical rule | 0.048 [0.040, 0.067] | -0.783 [-0.810, -0.747] worse | 0.855 | 6.0 [2.0, 11.0] | -38.3 [-45.0, -31.0] worse |
+| `hbos_r3` | unsupervised distribution | 0.104 [0.087, 0.134] | -0.727 [-0.757, -0.687] worse | 0.928 | 20.0 [13.0, 27.0] | -24.3 [-33.0, -15.0] worse |
+| `copod_r3` | unsupervised distribution | 0.125 [0.105, 0.158] | -0.707 [-0.736, -0.666] worse | 0.931 | 24.0 [17.0, 32.0] | -20.3 [-29.3, -11.3] worse |
+| `lof_r3` | unsupervised density | 0.017 [0.015, 0.021] | -0.815 [-0.844, -0.782] worse | 0.771 | 0.3 [0.0, 1.0] | -44.0 [-49.7, -38.0] worse |
+| `knn_r3` | unsupervised distance | 0.244 [0.215, 0.288] | -0.587 [-0.621, -0.542] worse | 0.967 | 28.3 [21.0, 35.7] | -16.0 [-24.0, -8.0] worse |
+| `ocsvm_r3` | unsupervised margin | 0.260 [0.228, 0.304] | -0.572 [-0.606, -0.526] worse | 0.956 | 31.3 [24.3, 38.7] | -13.0 [-20.7, -5.3] worse |
+| `autoencoder_r3` | unsupervised neural | 0.202 [0.179, 0.242] | -0.630 [-0.660, -0.586] worse | 0.958 | 24.7 [19.0, 31.0] | -19.7 [-26.7, -12.3] worse |
+| `mlp_r3` | supervised neural | 0.739 [0.700, 0.777] | -0.093 [-0.116, -0.072] worse | 0.945 | 42.0 [35.3, 48.0] | -2.3 [-7.7, +3.0] matches |
+| `gru_r3` | supervised sequence | 0.817 [0.789, 0.845] | -0.015 [-0.046, +0.020] matches | 0.969 | 37.7 [30.7, 44.7] | -6.7 [-13.0, -0.3] worse |
+| `graphsage_r3` | unsupervised graph | 0.025 [0.017, 0.037] | -0.807 [-0.840, -0.770] worse | 0.607 | 7.0 [3.3, 11.3] | -37.3 [-44.0, -30.3] worse |
 
 ## Budget curves and queue cost
 
@@ -49,6 +62,17 @@ Recall at k is the share of malicious identity-days ranked in the top k of their
 | `ocsvm` | 0.092 | 0.158 | 0.314 | 0.485 | 937 | 128.7 | 29% |
 | `logreg` | 0.074 | 0.137 | 0.283 | 0.445 | 701 | 128.0 | 26% |
 | `edge_causal` | 0.015 | 0.030 | 0.046 | 0.078 | 618 | 126.0 | 7% |
+| `zscore_r3` | 0.000 | 0.002 | 0.008 | 0.025 | 971 | 127.0 | 2% |
+| `pct_max_r3` | 0.036 | 0.046 | 0.072 | 0.103 | 884 | 126.0 | 6% |
+| `hbos_r3` | 0.053 | 0.091 | 0.181 | 0.245 | 789 | 126.0 | 17% |
+| `copod_r3` | 0.061 | 0.108 | 0.190 | 0.283 | 734 | 126.0 | 21% |
+| `lof_r3` | 0.001 | 0.002 | 0.030 | 0.066 | 742 | 125.0 | 0% |
+| `knn_r3` | 0.084 | 0.156 | 0.294 | 0.487 | 794 | 129.0 | 28% |
+| `ocsvm_r3` | 0.090 | 0.160 | 0.317 | 0.485 | 882 | 127.7 | 31% |
+| `autoencoder_r3` | 0.083 | 0.146 | 0.264 | 0.416 | 858 | 127.0 | 25% |
+| `mlp_r3` | 0.181 | 0.342 | 0.676 | 0.764 | 703 | 124.7 | 68% |
+| `gru_r3` | 0.187 | 0.360 | 0.717 | 0.875 | 777 | 112.7 | 76% |
+| `graphsage_r3` | 0.018 | 0.021 | 0.049 | 0.077 | 905 | 124.3 | 6% |
 
 ## Reach by scenario
 
@@ -74,6 +98,17 @@ Mean incident-folds reached within 72 hours per scenario; for the takeover (scen
 | `ocsvm` | 12.3 | 14.7 | 3.0 | 3.0 | 0.0 |
 | `logreg` | 8.0 | 16.0 | 2.0 | 2.0 | 0.0 |
 | `edge_causal` | 3.0 | 1.0 | 5.0 | 5.0 | 1.0 |
+| `zscore_r3` | 2.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| `pct_max_r3` | 5.0 | 1.0 | 0.0 | 0.0 | 0.0 |
+| `hbos_r3` | 6.0 | 11.0 | 3.0 | 3.0 | 0.0 |
+| `copod_r3` | 8.0 | 13.0 | 3.0 | 3.0 | 0.0 |
+| `lof_r3` | 0.0 | 0.3 | 0.0 | 0.0 | 0.0 |
+| `knn_r3` | 13.0 | 11.7 | 3.7 | 3.7 | 0.0 |
+| `ocsvm_r3` | 12.7 | 14.7 | 4.0 | 4.0 | 0.0 |
+| `autoencoder_r3` | 12.0 | 10.7 | 2.0 | 2.0 | 0.0 |
+| `mlp_r3` | 12.7 | 25.7 | 3.7 | 3.7 | 0.0 |
+| `gru_r3` | 9.3 | 27.0 | 1.3 | 1.3 | 0.0 |
+| `graphsage_r3` | 3.0 | 0.7 | 3.3 | 3.3 | 0.0 |
 
 ## Timeliness
 
@@ -99,5 +134,66 @@ Hours from an incident's first labelled record (own account) to the first invest
 | `ocsvm` | 47/51, 125 h, 62% | 46/117, 117 h, 52% | 10/15, 23 h, 10% |
 | `logreg` | 12/17, 64 h, 50% | 16/39, 115 h, 69% | 2/5, 45 h, 0% |
 | `edge_causal` | 3/17, 125 h, 67% | 1/39, 23 h, 0% | 5/5, 23 h, 0% |
+| `zscore_r3` | 3/17, 61 h, 33% | 0/39 | 0/5 |
+| `pct_max_r3` | 8/17, 88 h, 50% | 1/39, 237 h, 100% | 0/5 |
+| `hbos_r3` | 8/17, 22 h, 38% | 11/39, 186 h, 82% | 3/5, 42 h, 0% |
+| `copod_r3` | 11/17, 98 h, 55% | 13/39, 307 h, 85% | 4/5, 33 h, 25% |
+| `lof_r3` | 0/51 | 1/117, 525 h, 100% | 0/15 |
+| `knn_r3` | 48/51, 124 h, 62% | 35/117, 166 h, 63% | 11/15, 48 h, 0% |
+| `ocsvm_r3` | 48/51, 122 h, 67% | 44/117, 130 h, 64% | 12/15, 23 h, 0% |
+| `autoencoder_r3` | 42/51, 29 h, 29% | 34/117, 73 h, 59% | 6/15, 54 h, 0% |
+| `mlp_r3` | 41/51, 31 h, 32% | 79/117, 43 h, 30% | 11/15, 23 h, 0% |
+| `gru_r3` | 41/51, 61 h, 49% | 81/117, 69 h, 41% | 4/15, 54 h, 0% |
+| `graphsage_r3` | 9/51, 53 h, 0% | 2/117, 499 h, 100% | 10/15, 22 h, 0% |
 
-Reading rule (fixed in the specification): a method matches the baseline when the interval of its difference contains 0, and is better or worse when the whole interval is above or below 0. With 17 comparisons a single better or worse is a lead, not a finding.
+## Round 3: refined implementations against the originals
+
+Each refinement is described in the specification. The gate guard fired in 0 of 100 round 3 runs.
+
+| Original | Refined | Incidents reached | Change | Avg. precision | Change | Over gate |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `zscore` | `zscore_r3` | 3.0 → 2.0 | -1.0 | 0.011 → 0.014 | +0.003 | 958 → 971 |
+| `pct_max` | `pct_max_r3` | 3.0 → 6.0 | +3.0 | 0.023 → 0.048 | +0.025 | 11938 → 884 |
+| `hbos` | `hbos_r3` | 20.0 → 20.0 | +0.0 | 0.128 → 0.104 | -0.024 | 786 → 789 |
+| `copod` | `copod_r3` | 27.0 → 24.0 | -3.0 | 0.135 → 0.125 | -0.010 | 766 → 734 |
+| `lof` | `lof_r3` | 6.7 → 0.3 | -6.3 | 0.026 → 0.017 | -0.009 | 782 → 742 |
+| `knn` | `knn_r3` | 27.7 → 28.3 | +0.7 | 0.245 → 0.244 | -0.001 | 841 → 794 |
+| `ocsvm` | `ocsvm_r3` | 30.0 → 31.3 | +1.3 | 0.246 → 0.260 | +0.014 | 937 → 882 |
+| `autoencoder` | `autoencoder_r3` | 21.3 → 24.7 | +3.3 | 0.181 → 0.202 | +0.021 | 895 → 858 |
+| `mlp` | `mlp_r3` | 44.7 → 42.0 | -2.7 | 0.770 → 0.739 | -0.031 | 715 → 703 |
+| `gru` | `gru_r3` | 35.3 → 37.7 | +2.3 | 0.840 → 0.817 | -0.023 | 848 → 777 |
+| `graphsage` | `graphsage_r3` | 7.3 → 7.0 | -0.3 | 0.023 → 0.025 | +0.002 | 837 → 905 |
+
+5 of 11 refinements reached more incidents than their original, and no refined method changed its reading against `rf`. The comparison between families does not depend on these implementation choices.
+
+## Expectations against outcomes
+
+Expectations were written into the specification before each round ran. "Near" is read as within 5 incident-folds of reach; that tolerance was chosen when writing this report, not declared.
+
+| Round | Expectation | Held |
+| ---: | --- | --- |
+| 1 | `mlp` matches or trails `rf` | yes |
+| 1 | `autoencoder` and `gru_next` land near `if` and `ecod_top5`, far below the supervised methods | yes |
+| 1 | `gru` matches `rf` | partly: `gru` matches on average precision (the expectation did not name a measure) |
+| 1 | Graph methods rank lower than the behavioural detectors and do not reach the hijacked account | **no** |
+| 2 | `zscore` and `pct_max` land at or below the unsupervised detectors (AP under 0.2) | yes |
+| 2 | `hbos` and `copod` land near `ecod_top5` | **no** |
+| 2 | `lof` and `knn` land near `if`; `ocsvm` near `autoencoder` | **no** |
+| 2 | `logreg` trails `rf` on average precision | yes |
+| 2 | `edge_causal` admits far fewer rows than `edge` and stays well below the behavioural detectors | yes |
+| 3 | `zscore_r3` and `pct_max_r3` improve on their originals but stay below the unsupervised detectors | **no** |
+| 3 | At least four of the six upward-only variants improve their reach | **no** |
+| 3 | `mlp_r3` and `gru_r3` stay within the interval of `rf` | partly: `mlp_r3` matches on reach; `gru_r3` matches on average precision (the expectation did not name a measure) |
+| 3 | `gru_r3` keeps its reach deficit | yes |
+| 3 | `graphsage_r3` improves on `graphsage`, stays well below the behavioural detectors, and reaches the hijacked account at most once | **no** |
+
+## Identity reading
+
+Hijacked-account incident-folds reached within 72 hours, as a mean over seeds:
+
+- Methods that score the 33 personal-baseline inputs (23 variants): `gru_next` (0.7).
+- Graph methods, which score *which* computers and web domains an identity touches (4 variants): `edge` (1.0), `edge_causal` (1.0).
+
+Comparing an identity with its own past almost never reaches the account in use by someone else. The few hits come from scoring unfamiliar computer and domain edges, or from the next-day sequence model, and each of those methods reaches far fewer insider incidents. With this few hijacked incident-folds, it is a lead for linking identities (an attacker's logon on another person's computer), not a detector.
+
+Reading rule (fixed in the specification): a method matches the baseline when the interval of its difference contains 0, and is better or worse when the whole interval is above or below 0. With 28 comparisons a single better or worse is a lead, not a finding.

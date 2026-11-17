@@ -309,8 +309,8 @@ def _neural(f, early_stop=False):
 # name -> (family, deterministic, fit and score one fold). Order is the report's order.
 REGISTRY = {
     "rf": ("supervised tree", False, _project("rf", supervised=True)),
-    "if": ("unsupervised", False, _project("if")),
-    "ecod_top5": ("unsupervised", True, _project("ecod_top5", upward_inputs=True)),
+    "if": ("unsupervised isolation", False, _project("if")),
+    "ecod_top5": ("unsupervised tail rarity", True, _project("ecod_top5", upward_inputs=True)),
     "mlp": ("supervised neural", False, _neural),
     "autoencoder": ("unsupervised neural", False, _neural),
     "gru": ("supervised sequence", False, _neural),
@@ -620,6 +620,8 @@ def analyse(root=ROOT, rng_seed=0):
             "takeover_attacker_reached": own3 / len(seeds),
             "takeover_hijacked_reached": hijacked / len(seeds),
             "timeliness": timeliness(mine),
+            "gate_guard_runs": sum(bool(r.get("gate_guard")) for r in mine),
+            "runs": len(mine),
         }
         for measure in ("reached", "ap"):
             low, high = table[m][f"{measure}_difference_interval"]

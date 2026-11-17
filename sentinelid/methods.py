@@ -5,25 +5,35 @@ same gate and queue.
 Development only: every row read is before 2010-12-01, and the holdout labels are never loaded.
 """
 
-import heapq
 import json
-import math
 import sqlite3
 from collections import Counter, defaultdict
 from contextlib import closing
 from datetime import date
+from types import SimpleNamespace
 
 import numpy as np
-from scipy.stats import skew
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
-from sklearn.neighbors import LocalOutlierFactor, NearestNeighbors
-from sklearn.svm import OneClassSVM
 
 from . import research
 from .adaptive import upward
+from .detectors import (
+    Copula,
+    EdgeScorer,
+    Graph,
+    Histograms,
+    SageScorer,
+    causal_edge_scores,
+    edge_scores,
+    logistic,
+    neighbour_scores,
+    one_class_svm,
+    robust_z,
+    standardise,
+)
 from .experiment_io import save_json
 from .ingestion import ROOT
+from .reporting import write_methods_report
 from .research_data import DEVELOPMENT_END, cached_rows, truth
 
 FIT_START = "2010-06-08"
@@ -37,32 +47,8 @@ SEEDS = (0, 1, 2)
 GATE_QUANTILE = 0.99
 POLICY = "max_cooldown"
 WINDOW = 14
-TOP_EDGES = 3
-SMOOTHING = 5.0
 RECALL_AT = (1, 2, 5, 10)
 BASELINE = "rf"
-METHODS = (
-    "rf",
-    "if",
-    "ecod_top5",
-    "mlp",
-    "autoencoder",
-    "gru",
-    "gru_next",
-    "edge",
-    "graphsage",
-    # Round 2.
-    "zscore",
-    "pct_max",
-    "hbos",
-    "copod",
-    "lof",
-    "knn",
-    "ocsvm",
-    "logreg",
-    "edge_causal",
-)
-DETERMINISTIC = {"ecod_top5", "edge", "zscore", "pct_max", "hbos", "copod", "logreg", "edge_causal"}
 CHANNELS = (
     "usb",
     "copy",
@@ -73,28 +59,7 @@ CHANNELS = (
     "attachments",
     "http",
 )
-REFERENCE_DAYS, MIN_REFERENCE, MAD_FLOOR = 28, 7, 0.1
-NEIGHBOURS, NEIGHBOUR_ROWS, SVM_ROWS, SVM_NU, BINS = 20, 20_000, 10_000, 0.05, 10
-FAMILY = {
-    "rf": "supervised tree",
-    "if": "unsupervised",
-    "ecod_top5": "unsupervised",
-    "mlp": "supervised neural",
-    "autoencoder": "unsupervised neural",
-    "gru": "supervised sequence",
-    "gru_next": "unsupervised sequence",
-    "edge": "unsupervised graph",
-    "graphsage": "unsupervised graph",
-    "zscore": "statistical rule",
-    "pct_max": "statistical rule",
-    "hbos": "unsupervised distribution",
-    "copod": "unsupervised distribution",
-    "lof": "unsupervised density",
-    "knn": "unsupervised distance",
-    "ocsvm": "unsupervised margin",
-    "logreg": "supervised linear",
-    "edge_causal": "unsupervised graph",
-}
+REFERENCE_DAYS = 28
 REACH_RESAMPLES, AP_RESAMPLES = 2000, 1000
 
 
@@ -148,210 +113,6 @@ def ledger_edges(root, start, end):
             ):
                 edges[(day, identity)].extend(prefix + node for node in json.loads(payload))
     return edges
-
-
-class Graph:
-    """Identity-to-node edges weighted by the number of days they occurred, before `before`."""
-
-    def __init__(self, edges, before):
-        self.days = Counter()
-        for (day, identity), nodes in edges.items():
-            if day < before:
-                for node in nodes:
-                    self.days[(identity, node)] += 1
-        self.identities = sorted({u for u, _ in self.days})
-        self.nodes = sorted({v for _, v in self.days})
-        self.known = set(self.identities) | set(self.nodes)
-
-
-def kind(node):
-    return node.split(":", 1)[0]
-
-
-class EdgeScorer:
-    """Smoothed P(node | identity) per node type; surprise is -log P."""
-
-    def __init__(self, graph):
-        self.graph = graph
-        self.identity_days = Counter()
-        node_days = Counter()
-        for (u, v), n in graph.days.items():
-            self.identity_days[(u, kind(v))] += n
-            node_days[v] += n
-        totals, counts = Counter(), Counter()
-        for v, n in node_days.items():
-            totals[kind(v)] += n
-            counts[kind(v)] += 1
-        self.share = {
-            v: (n + 1) / (totals[kind(v)] + counts[kind(v)]) for v, n in node_days.items()
-        }
-        self.ceiling = max(self.raw(u, v) for u, v in graph.days)
-
-    def raw(self, u, v):
-        days = self.graph.days.get((u, v), 0)
-        return -math.log(
-            (days + SMOOTHING * self.share[v]) / (self.identity_days[(u, kind(v))] + SMOOTHING)
-        )
-
-    def surprise(self, u, v):
-        if u not in self.graph.known or v not in self.graph.known:
-            return self.ceiling
-        return self.raw(u, v)
-
-
-class SageScorer:
-    """GraphSAGE link-prediction embeddings; surprise is -log sigmoid(z_u . z_v)."""
-
-    def __init__(self, graph, seed):
-        from . import neural
-
-        index = {name: i for i, name in enumerate(graph.identities + graph.nodes)}
-        types = ["identity"] * len(graph.identities) + [kind(v) for v in graph.nodes]
-        pairs = list(graph.days)
-        sources = np.asarray([index[u] for u, _ in pairs])
-        targets = np.asarray([index[v] for _, v in pairs])
-        degree = np.bincount(np.concatenate([sources, targets]), minlength=len(index))
-        log_degree = np.log1p(degree)
-        log_degree = (log_degree - log_degree.mean()) / (log_degree.std() or 1.0)
-        names = ("identity", "pc", "web")
-        features = np.column_stack(
-            [np.asarray([t == k for t in types], dtype=float) for k in names] + [log_degree]
-        )
-        kinds = np.asarray([0 if kind(v) == "pc" else 1 for _, v in pairs])
-        pools = [
-            [index[v] for v in graph.nodes if kind(v) == "pc"],
-            [index[v] for v in graph.nodes if kind(v) == "web"],
-        ]
-        z = neural.graphsage(features, sources, targets, kinds, pools, seed)
-        self.index, self.z = index, z
-        logits = (z[sources] * z[targets]).sum(axis=1)
-        self.ceiling = float(np.max(np.logaddexp(0, -logits)))
-
-    def surprise(self, u, v):
-        if u not in self.index or v not in self.index:
-            return self.ceiling
-        return float(np.logaddexp(0, -float(self.z[self.index[u]] @ self.z[self.index[v]])))
-
-
-def edge_scores(scorer, edges, days, identities, top=TOP_EDGES):
-    """Sum of each identity-day's `top` largest edge surprises; 0 without edges."""
-    out = np.zeros(len(days))
-    for k, (day, identity) in enumerate(zip(days, identities, strict=True)):
-        nodes = edges.get((str(day), str(identity)))
-        if nodes:
-            out[k] = sum(heapq.nlargest(top, (scorer.surprise(str(identity), v) for v in nodes)))
-    return out
-
-
-def causal_edge_scores(edges, top=TOP_EDGES):
-    """{(day, identity): score} where each day is scored on strictly earlier days, then added."""
-    by_day = defaultdict(list)
-    for (day, identity), nodes in edges.items():
-        by_day[day].append((identity, nodes))
-    pair, identity_days, node_days = Counter(), Counter(), Counter()
-    totals, kinds = Counter(), Counter()
-    out = {}
-    for day in sorted(by_day):
-        for identity, nodes in by_day[day]:
-            surprises = []
-            for v in nodes:
-                k = kind(v)
-                share = (node_days[v] + 1) / (totals[k] + kinds[k] + 1)
-                surprises.append(
-                    -math.log(
-                        (pair[(identity, v)] + SMOOTHING * share)
-                        / (identity_days[(identity, k)] + SMOOTHING)
-                    )
-                )
-            out[(day, identity)] = sum(heapq.nlargest(top, surprises))
-        for identity, nodes in by_day[day]:
-            for v in nodes:
-                k = kind(v)
-                kinds[k] += node_days[v] == 0
-                pair[(identity, v)] += 1
-                identity_days[(identity, k)] += 1
-                node_days[v] += 1
-                totals[k] += 1
-    return out
-
-
-def robust_z(values, lagged):
-    """Largest absolute robust z-score per row against the identity's own earlier rows.
-
-    `lagged[:, :-1]` indexes the reference rows (-1 where the identity has no row that day);
-    the last column is the row itself and is not part of its own reference.
-    """
-    reference = np.where(
-        (lagged[:, :-1] >= 0)[..., None], values[lagged[:, :-1]], np.nan
-    )  # rows x days x channels
-    enough = (lagged[:, :-1] >= 0).sum(axis=1) >= MIN_REFERENCE
-    out = np.zeros(len(values))
-    with np.errstate(all="ignore"):
-        median = np.nanmedian(reference[enough], axis=1)
-        mad = np.nanmedian(np.abs(reference[enough] - median[:, None, :]), axis=1)
-    z = (values[enough] - median) / np.maximum(1.4826 * mad, MAD_FLOOR)
-    out[enough] = np.abs(z).max(axis=1)
-    return out
-
-
-class Histograms:
-    """HBOS: per-input equal-width histograms; the score sums -log of the relative bin height."""
-
-    def fit(self, x):
-        self.low, self.high = x.min(axis=0), x.max(axis=0)
-        self.width = np.where(self.high > self.low, (self.high - self.low) / BINS, 1.0)
-        bins = self.bins(x)
-        self.cost = np.empty((BINS, x.shape[1]))
-        for j in range(x.shape[1]):
-            counts = np.bincount(bins[:, j], minlength=BINS)
-            self.cost[:, j] = -np.log(np.maximum(counts / counts.max(), 1 / (len(x) + 1)))
-        return self
-
-    def bins(self, x):
-        return np.clip(((x - self.low) / self.width).astype(int), 0, BINS - 1)
-
-    def score(self, x):
-        bins = self.bins(x)
-        return self.cost[bins, np.arange(x.shape[1])].sum(axis=1)
-
-
-class Copula:
-    """COPOD with tail probabilities estimated on the training rows."""
-
-    def fit(self, x):
-        self.columns = np.sort(x, axis=0)
-        self.negative_skew = skew(x, axis=0) < 0
-        return self
-
-    def score(self, x):
-        n = len(self.columns)
-        left, right = np.empty(x.shape), np.empty(x.shape)
-        for j in range(x.shape[1]):
-            column = self.columns[:, j]
-            left[:, j] = -np.log((np.searchsorted(column, x[:, j], side="right") + 1) / (n + 1))
-            right[:, j] = -np.log((n - np.searchsorted(column, x[:, j], side="left") + 1) / (n + 1))
-        chosen = np.where(self.negative_skew, left, right)
-        return np.maximum.reduce([left.sum(axis=1), right.sum(axis=1), chosen.sum(axis=1)])
-
-
-def standardise(x, train):
-    mean, std = x[train].mean(axis=0), x[train].std(axis=0)
-    return (x - mean) / np.where(std == 0, 1.0, std)
-
-
-def neighbour_scores(method, z, train, test, seed):
-    """`lof` or `knn` against a seeded subsample of the training rows.
-
-    Returns the subsample's own scores (each row excluded from its neighbours) for the gate,
-    and the test scores.
-    """
-    rng = np.random.default_rng(seed)
-    reference = z[rng.choice(train, size=min(NEIGHBOUR_ROWS, len(train)), replace=False)]
-    if method == "lof":
-        model = LocalOutlierFactor(n_neighbors=NEIGHBOURS, novelty=True).fit(reference)
-        return -model.negative_outlier_factor_, -model.score_samples(z[test])
-    model = NearestNeighbors(n_neighbors=NEIGHBOURS).fit(reference)
-    return model.kneighbors()[0].mean(axis=1), model.kneighbors(z[test])[0].mean(axis=1)
 
 
 # ---------------------------------------------------------------------------
@@ -430,71 +191,131 @@ def raw_counts(root, days, identities):
     return counts
 
 
-def fit_and_score(method, inputs, train, test, seed, start):
-    """(scores on training rows, scores on test rows); higher is more suspicious."""
-    data, x = inputs.data, inputs.x
-    y = data.v["label"][train]
-    if (y < 0).any():
-        raise ValueError("Sealed label in development training")
-    if method in ("rf", "if"):
-        model = research.fit(method, x[train], y if method == "rf" else None, seed)
-        return research.score(model, x[train]), research.score(model, x[test])
-    if method == "ecod_top5":
-        up = upward(x, inputs.names)
-        model = research.fit("ecod_top5", up[train], None, seed, inputs.names)
-        return research.score(model, up[train]), research.score(model, up[test])
-    if method in ("edge", "graphsage"):
-        graph = Graph(inputs.edges, start)
-        scorer = EdgeScorer(graph) if method == "edge" else SageScorer(graph, seed)
-        days, identities = data.days, data.v["identity"]
-        return (
-            edge_scores(scorer, inputs.edges, days[train], identities[train]),
-            edge_scores(scorer, inputs.edges, days[test], identities[test]),
-        )
-    if method in ("zscore", "edge_causal"):
-        scores = inputs.zscore if method == "zscore" else inputs.causal
-        return scores[train], scores[test]
-    if method == "pct_max":
-        columns = [j for j, n in enumerate(inputs.names) if n.startswith("percentile:")]
-        return x[train][:, columns].max(axis=1), x[test][:, columns].max(axis=1)
-    if method in ("hbos", "copod"):
-        model = (Histograms() if method == "hbos" else Copula()).fit(x[train])
-        return model.score(x[train]), model.score(x[test])
-    if method in ("lof", "knn"):
-        return neighbour_scores(method, standardise(x, train), train, test, seed)
-    if method == "ocsvm":
-        z = standardise(x, train)
-        rows = np.random.default_rng(seed).choice(
-            train, size=min(SVM_ROWS, len(train)), replace=False
-        )
-        model = OneClassSVM(kernel="rbf", gamma="scale", nu=SVM_NU).fit(z[rows])
-        return -model.decision_function(z[train]), -model.decision_function(z[test])
-    if method == "logreg":
-        z = standardise(x, train)
-        model = LogisticRegression(C=1.0, class_weight="balanced", max_iter=1000).fit(z[train], y)
-        return model.decision_function(z[train]), model.decision_function(z[test])
+def _project(kind, upward_inputs=False, supervised=False):
+    def run(f):
+        x = upward(f.x, f.inputs.names) if upward_inputs else f.x
+        model = research.fit(kind, x[f.train], f.y if supervised else None, f.seed, f.inputs.names)
+        return research.score(model, x[f.train]), research.score(model, x[f.test])
+
+    return run
+
+
+def _graph(f):
+    graph = Graph(f.inputs.edges, f.start)
+    scorer = EdgeScorer(graph) if f.method == "edge" else SageScorer(graph, f.seed)
+    days, identities = f.inputs.data.days, f.inputs.data.v["identity"]
+    return (
+        edge_scores(scorer, f.inputs.edges, days[f.train], identities[f.train]),
+        edge_scores(scorer, f.inputs.edges, days[f.test], identities[f.test]),
+    )
+
+
+def _precomputed(name):
+    def run(f):
+        scores = getattr(f.inputs, name)
+        return scores[f.train], scores[f.test]
+
+    return run
+
+
+def _pct_max(f):
+    columns = [j for j, n in enumerate(f.inputs.names) if n.startswith("percentile:")]
+    return f.x[f.train][:, columns].max(axis=1), f.x[f.test][:, columns].max(axis=1)
+
+
+def _distribution(model):
+    def run(f):
+        fitted = model().fit(f.x[f.train])
+        return fitted.score(f.x[f.train]), fitted.score(f.x[f.test])
+
+    return run
+
+
+def _neural(f):
     from . import neural
 
-    z = neural.Standardizer(x[train])(x)
-    if method in ("gru", "gru_next"):
+    z = neural.Standardizer(f.x[f.train])(f.x)
+    if f.method in ("gru", "gru_next"):
 
         def maker(rows):
-            return windows(z, inputs.lagged[rows])
+            return windows(z, f.inputs.lagged[rows])
 
     else:
 
         def maker(rows):
             return lambda positions: z[rows[positions]]
 
-    if method in ("mlp", "gru"):
-        scorer = neural.classifier(method, maker(train), y, seed)
-    elif method == "autoencoder":
-        scorer = neural.reconstruction(maker(train), len(train), seed)
-    elif method == "gru_next":
-        scorer = neural.next_day(maker(train), len(train), x.shape[1], seed)
+    n = len(f.train)
+    if f.method in ("mlp", "gru"):
+        scorer = neural.classifier(f.method, maker(f.train), f.y, f.seed)
+    elif f.method == "autoencoder":
+        scorer = neural.reconstruction(maker(f.train), n, f.seed)
     else:
+        scorer = neural.next_day(maker(f.train), n, f.x.shape[1], f.seed)
+    return scorer(maker(f.train), n), scorer(maker(f.test), len(f.test))
+
+
+# name -> (family, deterministic, fit and score one fold). Order is the report's order.
+REGISTRY = {
+    "rf": ("supervised tree", False, _project("rf", supervised=True)),
+    "if": ("unsupervised", False, _project("if")),
+    "ecod_top5": ("unsupervised", True, _project("ecod_top5", upward_inputs=True)),
+    "mlp": ("supervised neural", False, _neural),
+    "autoencoder": ("unsupervised neural", False, _neural),
+    "gru": ("supervised sequence", False, _neural),
+    "gru_next": ("unsupervised sequence", False, _neural),
+    "edge": ("unsupervised graph", True, _graph),
+    "graphsage": ("unsupervised graph", False, _graph),
+    # Round 2.
+    "zscore": ("statistical rule", True, _precomputed("zscore")),
+    "pct_max": ("statistical rule", True, _pct_max),
+    "hbos": ("unsupervised distribution", True, _distribution(Histograms)),
+    "copod": ("unsupervised distribution", True, _distribution(Copula)),
+    "lof": (
+        "unsupervised density",
+        False,
+        lambda f: neighbour_scores("lof", standardise(f.x, f.train), f.train, f.test, f.seed),
+    ),
+    "knn": (
+        "unsupervised distance",
+        False,
+        lambda f: neighbour_scores("knn", standardise(f.x, f.train), f.train, f.test, f.seed),
+    ),
+    "ocsvm": (
+        "unsupervised margin",
+        False,
+        lambda f: one_class_svm(standardise(f.x, f.train), f.train, f.test, f.seed),
+    ),
+    "logreg": (
+        "supervised linear",
+        True,
+        lambda f: logistic(standardise(f.x, f.train), f.y, f.train, f.test),
+    ),
+    "edge_causal": ("unsupervised graph", True, _precomputed("causal")),
+}
+METHODS = tuple(REGISTRY)
+FAMILY = {name: family for name, (family, _, _) in REGISTRY.items()}
+DETERMINISTIC = {name for name, (_, fixed, _) in REGISTRY.items() if fixed}
+
+
+def fit_and_score(method, inputs, train, test, seed, start):
+    """(scores on training rows, scores on test rows); higher is more suspicious."""
+    if method not in REGISTRY:
         raise ValueError("Unknown method: " + method)
-    return scorer(maker(train), len(train)), scorer(maker(test), len(test))
+    y = inputs.data.v["label"][train]
+    if (y < 0).any():
+        raise ValueError("Sealed label in development training")
+    fold = SimpleNamespace(
+        method=method,
+        inputs=inputs,
+        x=inputs.x,
+        train=train,
+        test=test,
+        seed=seed,
+        start=start,
+        y=y,
+    )
+    return REGISTRY[method][2](fold)
 
 
 # ---------------------------------------------------------------------------
@@ -730,9 +551,9 @@ def analyse(root=ROOT, rng_seed=0):
                 if high < 0
                 else "matches"
             )
-    result = {"incident_folds": len(units), "methods": table}
+    result = {"incident_folds": len(units), "baseline": BASELINE, "methods": table}
     save_json(out / "analysis.json", result)
-    write_report(root / "reports/METHODS_STUDY.md", result)
+    write_methods_report(root / "reports/METHODS_STUDY.md", result)
     return result
 
 
@@ -759,108 +580,3 @@ def timeliness(runs):
             "share_after_72_hours": float(np.mean(np.asarray(hours) > 72)) if hours else None,
         }
     return out
-
-
-def write_report(path, result):
-    t = result["methods"]
-    f = lambda v: f"{v:.3f}"  # noqa: E731
-    lines = [
-        "# Methods study: detection methods compared",
-        "",
-        "Development folds August to November 2010 (expanding training window from 2010-06-08), "
-        "feature set `c`, gate at the 0.99 quantile of each method's training scores, the maintained "
-        "one-a-day queue. Specification, fixed before any result: "
-        "[docs/methods-study.md](../docs/methods-study.md). The holdout is not used. Intervals are "
-        "95% paired bootstrap intervals (incident-folds for reach, test days for average precision); "
-        f"the baseline is `{BASELINE}`.",
-        "",
-        f"## Ranking and reach ({result['incident_folds']} incident-folds)",
-        "",
-        "| Method | Family | Avg. precision [95%] | vs RF [95%] | ROC-AUC | Incidents reached [95%] | vs RF [95%] |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
-    ]
-    for m, r in t.items():
-        lo, hi = r["average_precision_interval"]
-        dlo, dhi = r["ap_difference_interval"]
-        rlo, rhi = r["incidents_reached_interval"]
-        qlo, qhi = r["reached_difference_interval"]
-        lines.append(
-            f"| `{m}` | {r['family']} | {f(r['average_precision'])} [{f(lo)}, {f(hi)}] | "
-            + (
-                "—"
-                if m == BASELINE
-                else f"{r['ap_difference']:+.3f} [{dlo:+.3f}, {dhi:+.3f}] {r['ap_reading']}"
-            )
-            + f" | {f(r['roc_auc'])} | {r['incidents_reached']:.1f} [{rlo:.1f}, {rhi:.1f}] | "
-            + (
-                "—"
-                if m == BASELINE
-                else f"{r['reached_difference']:+.1f} [{qlo:+.1f}, {qhi:+.1f}] {r['reached_reading']}"
-            )
-            + " |"
-        )
-    lines += [
-        "",
-        "## Budget curves and queue cost",
-        "",
-        "Recall at k is the share of malicious identity-days ranked in the top k of their own day "
-        "(before the gate and queue). Investigations and current-positive yield are through the queue.",
-        "",
-        "| Method | Recall@1 | Recall@2 | Recall@5 | Recall@10 | Over gate | Investigations | Yield |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-    ]
-    for m, r in t.items():
-        a = r["recall_at"]
-        lines.append(
-            f"| `{m}` | {a['1']:.3f} | {a['2']:.3f} | {a['5']:.3f} | {a['10']:.3f} | "
-            f"{r['gate_candidates']:.0f} | {r['admissions']:.1f} | "
-            f"{r['current_positive'] / r['admissions']:.0%} |"
-        )
-    lines += [
-        "",
-        "## Reach by scenario",
-        "",
-        "Mean incident-folds reached within 72 hours per scenario; for the takeover (scenario 3), "
-        "split by the attacker's own account and the hijacked account.",
-        "",
-        "| Method | Scenario 1 | Scenario 2 | Scenario 3 | Takeover: attacker | Takeover: hijacked |",
-        "| --- | ---: | ---: | ---: | ---: | ---: |",
-    ]
-    for m, r in t.items():
-        s = r["scenario_reached"]
-        lines.append(
-            f"| `{m}` | {s.get('1', 0):.1f} | {s.get('2', 0):.1f} | {s.get('3', 0):.1f} | "
-            f"{r['takeover_attacker_reached']:.1f} | {r['takeover_hijacked_reached']:.1f} |"
-        )
-    lines += [
-        "",
-        "## Timeliness",
-        "",
-        "Hours from an incident's first labelled record (own account) to the first investigation "
-        "showing one, pooled over folds and seeds; incidents never shown are left out. Ranking "
-        "measures reward a malicious day ranked high on any day of an incident; reach needs it "
-        "early.",
-        "",
-        "| Method | Scenario 1: shown, median h, after 72 h | Scenario 2 | Scenario 3 |",
-        "| --- | ---: | ---: | ---: |",
-    ]
-    for m, r in t.items():
-        cells = []
-        for scenario in ("1", "2", "3"):
-            c = r["timeliness"][scenario]
-            cells.append(
-                f"{c['shown']}/{c['incidents']}, {c['median_hours']:.0f} h, "
-                f"{c['share_after_72_hours']:.0%}"
-                if c["shown"]
-                else f"0/{c['incidents']}"
-            )
-        lines.append(f"| `{m}` | " + " | ".join(cells) + " |")
-    lines += [
-        "",
-        "Reading rule (fixed in the specification): a method matches the baseline when the interval "
-        "of its difference contains 0, and is better or worse when the whole interval is above or "
-        f"below 0. With {len(t) - 1} comparisons a single better or worse is a lead, not a "
-        "finding.",
-        "",
-    ]
-    path.write_text("\n".join(lines))

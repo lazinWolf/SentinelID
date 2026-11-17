@@ -119,3 +119,9 @@ def truth(archive, start, end):
                         "official_end": parse_date(incident["end"]).isoformat(),
                     }
     return events
+
+
+def directory(root=ROOT):
+    path = root / "data/research"
+    path.mkdir(parents=True, exist_ok=True)
+    return path

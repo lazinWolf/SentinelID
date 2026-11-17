@@ -224,7 +224,7 @@ class ResearchTests(unittest.TestCase):
         np.testing.assert_array_equal(adjusted, [7.0, 1.0, 2.0, 5.0])
 
     def test_holdout_report_is_named_after_its_stage(self):
-        from sentinelid.research import write_holdout_report
+        from sentinelid.reporting import write_holdout_report
 
         def run(name, role):
             return {

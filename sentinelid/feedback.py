@@ -660,6 +660,22 @@ def app_comparison(config_path=DEFAULT_CONFIG, root=ROOT):
     return result
 
 
+# The investigation of the score differences, done once by hand on the saved comparison.
+APP_DIFFERENCES = (
+    "## Where the score differences come from\n\n"
+    "All 33 inputs agree on every one of the 18,772 scored November identity-days, and scores "
+    "already differ on November 1, before any verdict exists. The difference is therefore in the "
+    "label-free reference (June 8 – October 31): 820 of its 96,123 rows differ, only in novelty "
+    "inputs (new hosts, recipients and domains), always with the live replay counting more (by one "
+    "in 462 of 481 host differences). They fall on the first working day after a break: 16 Mondays "
+    "from June 14 to October 11 (31 to 59 identities each), the Tuesdays after the July 5 and "
+    "September 6 holidays (43 and 45), and 6 rows on five Sundays. November matches. The live "
+    "feature builder and the builder of the archived development cache evidently bound novelty "
+    "history across non-working days differently before November. The cause was not traced "
+    "further, and it changed no admission."
+)
+
+
 def write_app_report(root, result):
     harness, app = result["harness"]["admissions"], result["app"]["admissions"]
     margin = result["largest_margin_difference"]
@@ -696,4 +712,6 @@ def write_app_report(root, result):
             f"{app[first] if first < len(app) else '-'}.",
             "",
         ]
+    if result["admissions_equal"] and result["scored_rows"]["shared"] == 18772:
+        lines += [APP_DIFFERENCES, ""]
     (root / "reports/ADAPTIVE_APP_CHECK.md").write_text("\n".join(lines))

@@ -15,14 +15,10 @@ from pathlib import Path
 
 import joblib
 import numpy as np
-from sklearn.ensemble import (
-    HistGradientBoostingClassifier,
-    IsolationForest,
-    RandomForestClassifier,
-)
 
 from . import ledger
-from .adaptive import TailScorer, upward
+from .adaptive import TailScorer, upward  # noqa: F401  (TailScorer: re-exported)
+from .detectors import ByDayType, detector, fit, score, weekends  # noqa: F401
 from .experiment_evaluation import evaluate
 from .experiment_features import TEMPORAL, corrected, measurements, vector
 from .experiment_io import digest, fingerprint, save_json
@@ -30,7 +26,13 @@ from .experiment_queue import ExperimentQueue
 from .features import PEER
 from .ingestion import ROOT
 from .pipeline import matrix
-from .research_data import DEVELOPMENT_END, cached_rows, extract, truth
+from .reporting import (
+    combine_coverage,
+    write_backtest_report,
+    write_coverage_report,
+    write_holdout_report,
+)
+from .research_data import DEVELOPMENT_END, cached_rows, directory, extract, truth
 
 ARCHIVE_ROWS = "data/experiments/inputs/features.sqlite"
 ANSWERS = "data/experiments/inputs/answers.tar.bz2"
@@ -38,12 +40,6 @@ HOLDOUT_START = "2010-12-01"
 HOLDOUT_END = "2011-05-17"
 DEFAULT_CONFIG = "configs/research.json"
 LEDGER_START = "2010-05-01"
-
-
-def directory(root=ROOT):
-    path = root / "data/research"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def day_after(day, n=1):
@@ -280,23 +276,6 @@ class Data:
 # Models, queue replay and evaluation.
 
 
-class ByDayType:
-    """Separate label-free references for weekend and weekday identity-days."""
-
-    def __init__(self, build, x, weekend):
-        self.models = {flag: build().fit(x[weekend == flag]) for flag in (False, True)}
-
-    def score_samples(self, x, weekend):
-        result = np.empty(len(x))
-        for flag, model in self.models.items():
-            result[weekend == flag] = model.score_samples(x[weekend == flag])
-        return result
-
-
-def weekends(days):
-    return np.asarray([date.fromisoformat(str(d)).weekday() >= 5 for d in days])
-
-
 # Data-movement channels; email content-volume inputs are excluded by channel, not by score.
 MOVEMENT = (
     "usb",
@@ -329,57 +308,6 @@ def design(data, candidate):
         ]
         x, names = x[:, keep], [names[j] for j in keep]
     return x, names
-
-
-def detector(kind, seed, names=None):
-    """Unfitted label-free detector: if[256|200], ecod, ecod_top<k>, ecodc[<k>]."""
-    if kind.startswith("if"):
-        return IsolationForest(
-            n_estimators=200 if kind.endswith("200") else 100,
-            max_samples=256 if "256" in kind else 1024,
-            random_state=seed,
-            n_jobs=-1,
-        )
-    if kind.startswith("ecodc"):
-        return TailScorer(int(kind[5:]) if kind[5:] else None, names)
-    if kind.startswith("ecod"):
-        return TailScorer(int(kind[8:]) if kind.startswith("ecod_top") else None)
-    raise ValueError("Unknown model: " + kind)
-
-
-def fit(kind, x, y, seed, names=None, weekend=None):
-    if kind.endswith("_wk"):
-        base = kind.removesuffix("_wk")
-        return ByDayType(lambda: detector(base, seed, names), x, weekend)
-    if kind.startswith("rf"):
-        trees = int(kind[2:] or 100)
-        return RandomForestClassifier(
-            n_estimators=trees,
-            max_depth=8,
-            min_samples_leaf=3,
-            class_weight="balanced_subsample",
-            random_state=seed,
-            n_jobs=-1,
-        ).fit(x, y)
-    if kind == "hgb":
-        return HistGradientBoostingClassifier(
-            max_depth=4,
-            learning_rate=0.05,
-            max_iter=300,
-            min_samples_leaf=20,
-            l2_regularization=1.0,
-            class_weight="balanced",
-            random_state=seed,
-        ).fit(x, y)
-    return detector(kind, seed, names).fit(x)
-
-
-def score(model, x, weekend=None):
-    if isinstance(model, ByDayType):
-        return -model.score_samples(x, weekend)
-    if isinstance(model, IsolationForest | TailScorer):
-        return -model.score_samples(x)
-    return model.predict_proba(x)[:, 1]
 
 
 class ResearchQueue(ExperimentQueue):
@@ -601,7 +529,7 @@ def backtest(config_path, root=ROOT):
             ],
         },
     )
-    write_report(root / config.get("report", "reports/BACKTEST.md"), config, summary)
+    write_backtest_report(root / config.get("report", "reports/BACKTEST.md"), config, summary)
     return summary
 
 
@@ -646,93 +574,6 @@ def summarize(config, results):
         key=lambda t: (t["timely_incidents"]["mean"], t["current_positive_yield"]),
     )
     return {"candidates": table, "selected": best["name"]}
-
-
-COUNTS = ("identity_days", "gate_days", "incidents", "timely_incidents")
-
-
-def combine_coverage(runs):
-    """Role coverage summed over folds, then averaged over seeds."""
-    seeds = defaultdict(lambda: defaultdict(lambda: defaultdict(Counter)))
-    for r in runs:
-        for scenario, roles in r.get("role_coverage", {}).items():
-            for kind, values in roles.items():
-                seeds[r.get("seed", 0)][scenario][kind].update({k: values[k] for k in COUNTS})
-    result = {}
-    for per_seed in seeds.values():
-        for scenario, roles in per_seed.items():
-            for kind, values in roles.items():
-                target = result.setdefault(scenario, {}).setdefault(kind, dict.fromkeys(COUNTS, 0))
-                for k in COUNTS:
-                    target[k] += values[k] / len(seeds)
-    return result
-
-
-def coverage_lines(table):
-    """Markdown rows: candidate, scenario, role, gate days and timely incidents."""
-    lines = [
-        "| Candidate | Scenario | Account | Days over gate | Timely incidents |",
-        "| --- | --- | --- | ---: | ---: |",
-    ]
-    for name, t in table.items():
-        for scenario, roles in sorted(t["role_coverage"].items()):
-            for kind, v in sorted(roles.items(), reverse=True):
-                lines.append(
-                    f"| {name} | {scenario} | {kind} | {v['gate_days']:.1f} / "
-                    f"{v['identity_days']:.0f} | {v['timely_incidents']:.1f} / {v['incidents']:.0f} |"
-                )
-    return lines
-
-
-def policy_label(candidate):
-    parts = [candidate["policy"], "rank=" + candidate.get("rank", "max")]
-    parts += [f"{k}={v}" for k, v in candidate.get("queue", {}).items()]
-    return ", ".join(parts)
-
-
-def write_report(path, config, summary):
-    lines = [
-        "# Development backtest",
-        "",
-        "Rolling-origin folds inside June-November 2010. Each fold refits on all earlier development days, "
-        "sets the gate at the fitting-score quantile, and replays one admission per day with cooldown and expiry. "
-        f"Seeds: {config['seeds']}. Totals are summed over folds and averaged over seeds (min-max in brackets). "
-        "The sealed December 2010 - May 2011 holdout is not used here.",
-        "",
-        "| Candidate | Features | Model | Queue | Admissions | Current + | Yield | Timely incidents | AP | Gate recall |",
-        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
-    ]
-    for t in summary["candidates"].values():
-        ti = t["timely_incidents"]
-        lines.append(
-            f"| {t['name']} | {t['features']} | {t['model']} | {policy_label(t)} | "
-            f"{t['admissions']['mean']:.1f} | {t['current_positive']['mean']:.1f} | "
-            f"{t['current_positive_yield']:.3f} | {ti['mean']:.1f} [{ti['min']:.0f}-{ti['max']:.0f}] / "
-            f"{t['incidents_available']:.0f} | {t['detector_average_precision']:.3f} | {t['gate_recall']:.3f} |"
-        )
-    lines += [
-        "",
-        f"Baseline: `{config['baseline']}`. Selection rule: {config['selection_rule']}",
-        "",
-        f"**Selected for the sealed holdout: `{summary['selected']}`.**",
-        "",
-    ]
-    if any(t.get("role_coverage") for t in summary["candidates"].values()):
-        lines += [
-            "## Coverage by scenario and account",
-            "",
-            "Scenario 1 and 2 insiders act under their own account. Scenario 3 is an account "
-            "takeover: the attacker logs on to the supervisor's computer as the supervisor, so "
-            "its records fall under two accounts, `own` (the attacker's preparation) and "
-            "`hijacked` (the victim's account in use). Days are labelled identity-days; an "
-            "incident counts once per account role when a record under that role reaches an "
-            "analyst within 72 hours.",
-            "",
-            *coverage_lines(summary["candidates"]),
-            "",
-        ]
-    path.parent.mkdir(exist_ok=True)
-    path.write_text("\n".join(lines))
 
 
 # ---------------------------------------------------------------------------
@@ -889,87 +730,8 @@ def holdout(root=ROOT, seeds=(0, 1, 2, 3, 4), output="backtest"):
     return runs
 
 
-def write_holdout_report(root=ROOT, stage="holdout"):
-    result = json.loads((directory(root) / stage / "result.json").read_text())
-    groups = defaultdict(list)
-    for run in result["runs"]:
-        groups[(run["role"], run["name"])].append(run)
-
-    def span(runs, key):
-        values = [r[key] for r in runs]
-        low, high = min(values), max(values)
-        return f"{low}" if low == high else f"{low}-{high}"
-
-    lines = [
-        "# Sealed holdout evaluation",
-        "",
-        f"Holdout: {result['holdout'][0]} to {result['holdout'][1]} (exclusive), original CERT r4.2 records "
-        "never used for development. Every scorer was fitted and frozen before holdout labels were read; "
-        "this evaluation runs once. Refit scorers use June 8 - November 30 development data (labels only for supervised scorers); ranges are over 5 seeds. "
-        "Queue: one admission per day, 7-day cooldown, 3-day expiry, plus drain.",
-        "",
-        "**Fresh insiders** are incidents whose official start is on or after the holdout start; "
-        "**timely** means a labelled record was presented within 72 hours of that record.",
-        "",
-    ]
-    if result.get("previous_holdout_uses"):
-        lines += [
-            "**Exploratory reuse:** this holdout was already evaluated for "
-            + ", ".join(result["previous_holdout_uses"])
-            + ". These candidates were developed without its results, but it is no longer untouched.",
-            "",
-        ]
-    lines += [
-        "| Role | Scorer | Admissions | Current + | Yield | Timely incidents | Fresh insiders | AP | Gate recall |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-    ]
-    for (role, name), runs in groups.items():
-        first = runs[0]
-        yields = [r["current_positive_yield"] for r in runs]
-        lines.append(
-            f"| {role} | {name} | {span(runs, 'admissions')} | {span(runs, 'current_positive')} | "
-            f"{min(yields):.2f}-{max(yields):.2f} | {span(runs, 'timely_incidents')} / {first['incidents_available']} | "
-            f"{span(runs, 'timely_fresh_incidents')} / {first['fresh_incidents_available']} | "
-            f"{np.mean([r['detector_average_precision'] for r in runs]):.3f} | "
-            f"{np.mean([r['gate_recall'] for r in runs]):.3f} |"
-        )
-    deployed = groups[("primary", "deployed (frozen, fit Jun-Oct)")][0]
-    lines += [
-        "",
-        "## Deployed model detail",
-        "",
-        f"- Scenario breakdown: {json.dumps(deployed['scenario_breakdown'])}",
-        f"- Terminal event assignments: {json.dumps(deployed['event_losses'])}",
-        f"- Queue decisions: {json.dumps(deployed['queue_decisions'])}",
-        "- Median delay from official incident onset to the timely admission: "
-        f"{np.median([h['official_onset_delay_hours'] for h in deployed['timely_hits'].values()]):.1f} hours",
-        "",
-    ]
-    if all("role_coverage" in r for r in result["runs"]):
-        table = {
-            name: {"role_coverage": combine_coverage(runs)} for (_, name), runs in groups.items()
-        }
-        lines += [
-            "## Coverage by scenario and account",
-            "",
-            "Means over seeds. `hijacked` is scenario 3's victim account in use by the attacker.",
-            "",
-            *coverage_lines(table),
-            "",
-        ]
-    suffix = stage.removeprefix("holdout").upper()
-    (root / f"reports/HOLDOUT{suffix}.md").write_text("\n".join(lines))
-
-
 # ---------------------------------------------------------------------------
 # Identity-attack coverage of the frozen deployed model (descriptive, no selection).
-
-SCENARIOS = {
-    "1": "Data theft before leaving: after-hours logons, USB use, upload to wikileaks.org",
-    "2": "Job hunting, then data theft to a USB drive before leaving",
-    "3": "Account takeover: keylogger planted on the supervisor's computer, then mass email "
-    "sent while logged on as the supervisor",
-}
 
 
 def identity_coverage(root=ROOT):
@@ -1017,57 +779,3 @@ def identity_coverage(root=ROOT):
     save_json(directory(root) / "identity-coverage.json", result)
     write_coverage_report(root, result)
     return result
-
-
-def write_coverage_report(root, result):
-    lines = [
-        "# Identity-attack coverage",
-        "",
-        "How the frozen deployed model's already-reported results split by attack scenario and by "
-        "whose account the malicious activity was recorded under. Nothing here was used to select "
-        "or tune anything; the holdout scores are the ones frozen before its labels were read.",
-        "",
-        "## Scenarios in CERT r4.2",
-        "",
-        "| Scenario | Behaviour | Accounts involved |",
-        "| --- | --- | --- |",
-        f"| 1 | {SCENARIOS['1']} | the insider's own |",
-        f"| 2 | {SCENARIOS['2']} | the insider's own |",
-        f"| 3 | {SCENARIOS['3']} | the attacker's own, then the victim's (`hijacked`) |",
-        "",
-    ]
-    for name, p in result["periods"].items():
-        lines += [
-            f"## {name.capitalize()} ({p['span'][0]} to {p['span'][1]}, exclusive)",
-            "",
-            f"{p['admissions']} investigations, {p['current_positive']} current-positive, "
-            f"{p['timely_incidents']}/{p['incidents_available']} incidents reached in time.",
-            "",
-            "| Scenario | Account | Labelled days over the gate | Incidents reached within 72 h "
-            "| Median hours, first record to admission |",
-            "| --- | --- | ---: | ---: | ---: |",
-        ]
-        for scenario, roles in sorted(p["role_coverage"].items()):
-            for kind, v in sorted(roles.items(), reverse=True):
-                delays = v["first_record_to_admission_hours"]
-                median = f"{np.median(delays):.0f}" if delays else "never shown"
-                lines.append(
-                    f"| {scenario} | {kind} | {v['gate_days']} / {v['identity_days']} | "
-                    f"{v['timely_incidents']} / {v['incidents']} | {median} |"
-                )
-        lines += [
-            "",
-            "Where labelled records ended up (event counts): "
-            + "; ".join(
-                f"scenario {sc}: " + ", ".join(f"{k} {n}" for k, n in sorted(c.items()))
-                for sc, c in p["losses_by_scenario"].items()
-            )
-            + ".",
-            "",
-        ]
-    lines += [
-        "`admitted_context` means the record was shown in an investigation; `threshold` means its "
-        "day scored below the gate; `cooldown`, `expiry` and `budget_pending` are queue losses.",
-        "",
-    ]
-    (root / "reports/IDENTITY_COVERAGE.md").write_text("\n".join(lines))

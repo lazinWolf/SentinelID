@@ -6,7 +6,7 @@ import unittest
 import numpy as np
 from sklearn.metrics import average_precision_score
 
-from sentinelid import methods
+from sentinelid import detectors, methods
 
 HAS_TORCH = importlib.util.find_spec("torch") is not None
 
@@ -40,12 +40,12 @@ class GraphTests(unittest.TestCase):
         }
 
     def test_graph_holds_only_history_before_the_fold(self):
-        graph = methods.Graph(self.edges, "2010-07-01")
+        graph = detectors.Graph(self.edges, "2010-07-01")
         self.assertEqual(graph.days[("A", "pc:1")], 2)
         self.assertNotIn("pc:9", graph.known)
 
     def test_rare_edges_are_more_surprising_and_unknown_nodes_get_the_ceiling(self):
-        scorer = methods.EdgeScorer(methods.Graph(self.edges, "2010-07-01"))
+        scorer = detectors.EdgeScorer(detectors.Graph(self.edges, "2010-07-01"))
         self.assertLess(scorer.surprise("A", "pc:1"), scorer.surprise("A", "pc:2"))
         self.assertLess(scorer.surprise("A", "pc:2"), scorer.surprise("B", "pc:1"))
         self.assertEqual(scorer.surprise("A", "pc:9"), scorer.ceiling)
@@ -58,7 +58,9 @@ class GraphTests(unittest.TestCase):
 
         edges = {("d1", "A"): ["a", "b", "c", "d"], ("d1", "B"): ["a"]}
         days, who = np.asarray(["d1", "d1", "d2"]), np.asarray(["A", "B", "A"])
-        self.assertEqual(methods.edge_scores(Fixed(), edges, days, who).tolist(), [10.0, 1.0, 0.0])
+        self.assertEqual(
+            detectors.edge_scores(Fixed(), edges, days, who).tolist(), [10.0, 1.0, 0.0]
+        )
 
 
 class MeasureTests(unittest.TestCase):
@@ -90,7 +92,7 @@ class RoundTwoTests(unittest.TestCase):
             ("2010-06-02", "A"): ["pc:1"],
             ("2010-06-03", "A"): ["pc:1", "pc:2"],
         }
-        scores = methods.causal_edge_scores(edges)
+        scores = detectors.causal_edge_scores(edges)
         # Same-day edges do not inform each other: A and B both meet pc:1 as unseen.
         self.assertEqual(scores[("2010-06-01", "A")], scores[("2010-06-01", "B")])
         # A repeated edge is less surprising than its first appearance.
@@ -99,7 +101,7 @@ class RoundTwoTests(unittest.TestCase):
         self.assertGreater(scores[("2010-06-03", "A")], 2 * scores[("2010-06-02", "A")])
         # Later days never change an earlier score.
         self.assertEqual(
-            methods.causal_edge_scores({k: v for k, v in edges.items() if k[0] < "2010-06-03"})[
+            detectors.causal_edge_scores({k: v for k, v in edges.items() if k[0] < "2010-06-03"})[
                 ("2010-06-02", "A")
             ],
             scores[("2010-06-02", "A")],
@@ -112,17 +114,17 @@ class RoundTwoTests(unittest.TestCase):
         values[9] = [1.0, 6.0]  # A's last day spikes in one channel
         values[10:] = 50.0  # B is steady at a different level
         lagged = methods.lags(days, who, window=methods.REFERENCE_DAYS + 1)
-        z = methods.robust_z(values, lagged)
+        z = detectors.robust_z(values, lagged)
         self.assertEqual(z[:7].tolist(), [0.0] * 7)  # fewer than 7 reference rows
         self.assertEqual(z[8], 0.0)
-        self.assertAlmostEqual(z[9], 5.0 / methods.MAD_FLOOR)
+        self.assertAlmostEqual(z[9], 5.0 / detectors.MAD_FLOOR)
         self.assertEqual(z[19], 0.0)  # B is never compared with A
 
     def test_distribution_scores_rise_in_the_tails(self):
         rng = np.random.default_rng(0)
         x = rng.normal(size=(5000, 4))
         probe = np.asarray([[0.0] * 4, [4.0, 0.0, 0.0, 0.0], [99.0] * 4])
-        for model in (methods.Histograms().fit(x), methods.Copula().fit(x)):
+        for model in (detectors.Histograms().fit(x), detectors.Copula().fit(x)):
             scores = model.score(probe)
             self.assertTrue(np.isfinite(scores).all())
             self.assertLess(scores[0], scores[1])
@@ -196,7 +198,7 @@ class NeuralTests(unittest.TestCase):
         edges = {("2010-06-01", u): [f"pc:{u}", "web:a.com"] for u in ("A", "B", "C")} | {
             ("2010-06-02", "A"): ["pc:B"]
         }
-        scorer = methods.SageScorer(methods.Graph(edges, "2010-07-01"), seed=0)
+        scorer = detectors.SageScorer(detectors.Graph(edges, "2010-07-01"), seed=0)
         self.assertEqual(scorer.z.shape[0], 3 + 4)
         self.assertTrue(np.isfinite(scorer.surprise("A", "pc:A")))
         self.assertEqual(scorer.surprise("A", "pc:unknown"), scorer.ceiling)
